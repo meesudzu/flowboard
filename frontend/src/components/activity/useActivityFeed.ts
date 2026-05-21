@@ -94,13 +94,20 @@ export function useActivityFeed(panelOpen: boolean) {
     }
   }, [items]);
 
-  // Unread = running OR (failed AND id > lastSeenId).
+  // Unread = running OR (failed/timeout AND id > lastSeenId).
   // Running is always "live" so it counts regardless of lastSeenId.
+  // 'canceled' is a user action — never unread-worthy. 'timeout' is
+  // an auto-cancel surfacing a stuck job; we treat it like 'failed'
+  // so the badge pings until the user reviews it.
   let runningCount = 0;
   let unreadFailed = 0;
   for (const it of items) {
     if (it.status === "running" || it.status === "queued") runningCount += 1;
-    else if (it.status === "failed" && it.id > lastSeenId) unreadFailed += 1;
+    else if (
+      (it.status === "failed" || it.status === "timeout") &&
+      it.id > lastSeenId
+    )
+      unreadFailed += 1;
   }
   const unreadCount = runningCount + unreadFailed;
   const hasFailed = unreadFailed > 0;

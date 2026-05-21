@@ -30,10 +30,16 @@ export const STATUS_META: Record<
   string,
   { icon: string; label: string; tone: "muted" | "running" | "ok" | "fail" }
 > = {
-  queued:  { icon: "⋯", label: "queued",  tone: "muted" },
-  running: { icon: "⟳", label: "running", tone: "running" },
-  done:    { icon: "✓", label: "done",    tone: "ok" },
-  failed:  { icon: "✗", label: "failed",  tone: "fail" },
+  queued:   { icon: "⋯", label: "queued",   tone: "muted" },
+  running:  { icon: "⟳", label: "running",  tone: "running" },
+  done:     { icon: "✓", label: "done",     tone: "ok" },
+  failed:   { icon: "✗", label: "failed",   tone: "fail" },
+  // User-initiated cancel — soft, not an error. Muted tone so it
+  // doesn't compete visually with real failures.
+  canceled: { icon: "⊘", label: "canceled", tone: "muted" },
+  // Auto-cancel after the 5-minute video-gen budget elapses. Treated
+  // as a soft failure so the badge still pings the user.
+  timeout:  { icon: "⏱", label: "timeout",  tone: "fail" },
 };
 
 export function statusMeta(status: string) {

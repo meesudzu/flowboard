@@ -50,24 +50,25 @@ def get_request(request_id: int):
 
 @router.post("/{request_id}/cancel")
 def cancel_request(request_id: int):
-    """Cancel a queued request before the worker picks it up.
+    """Cancel a ``queued`` or ``running`` request.
 
-    Only ``queued`` rows are cancelable. The worker pulls rids off an
-    in-memory ``asyncio.Queue`` and we can't yank a value back out, so
-    we mark the row as ``failed`` with ``error='canceled'`` and let
-    ``_process_one`` skip rows whose DB status drifted away from
-    ``queued``. Returns 409 for any other state — running jobs need
-    different surgery (in-flight HTTP calls to Flow).
+    Cancellation is cooperative on the running side: we can't abort an
+    in-flight HTTP call to Flow, but the long-running handlers (notably
+    ``_handle_gen_video``) re-read the row between polls and bail out
+    when they see ``status == 'canceled'``. The worker's ``_process_one``
+    also re-checks the row before its final stamp, so the canceled
+    status is never overwritten by a late-arriving result.
     """
     with get_session() as s:
         req = s.get(Request, request_id)
         if req is None:
             raise HTTPException(404, "request not found")
-        if req.status != "queued":
+        if req.status not in ("queued", "running"):
             raise HTTPException(
-                409, f"only queued requests can be canceled (status={req.status})"
+                409,
+                f"only queued or running requests can be canceled (status={req.status})",
             )
-        req.status = "failed"
+        req.status = "canceled"
         req.error = "canceled"
         req.finished_at = datetime.now(timezone.utc)
         s.add(req)

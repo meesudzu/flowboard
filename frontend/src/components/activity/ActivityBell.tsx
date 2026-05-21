@@ -35,7 +35,8 @@ export function ActivityBell() {
         await cancelActivity(id);
       } catch (e) {
         // Swallow — refresh below will reveal the real state
-        // (e.g. 409 because the worker already promoted to running).
+        // (e.g. 409 because the row already finished done/failed/etc.
+        // between the user's click and the request landing).
         console.warn("cancel failed", e);
       }
       void feed.refresh();
