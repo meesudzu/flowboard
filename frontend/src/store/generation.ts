@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { ensureBoardProject, createRequest, getRequest, patchNode } from "../api/client";
+import {
+  ensureBoardProject,
+  createRequest,
+  getRequest,
+  getActivityList,
+  patchNode,
+} from "../api/client";
 import { useBoardStore } from "./board";
 import { useSettingsStore } from "./settings";
 
@@ -50,6 +56,16 @@ interface GenerationState {
 
   cancelGeneration(rfId: string): void;
   clearError(): void;
+
+  // Re-attach poll loops for in-flight requests on page load.
+  // Fetches Request rows with status in (queued, running), maps each
+  // to a node by node_id, and resumes the same poll state machine the
+  // dispatch path uses. Without this a page reload wipes the in-memory
+  // `active` map and the affected node falls back to whatever status
+  // was last persisted on the board (typically "idle" for a never-rendered
+  // node, never "running") — leaving the user staring at a card that
+  // looks idle while the backend is still rendering.
+  rehydrateRunningPolls(): Promise<void>;
 }
 
 // Walk the board to collect mediaIds of every upstream media-bearing node
@@ -307,210 +323,20 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       return;
     }
 
-    // Start polling
+    // Hand the loop off to the shared helper so the dispatch path and
+    // the boot-time rehydration path share the same Request → node
+    // state machine. The inline scheduleNextPoll closure used to live
+    // here; factored out to `scheduleGenerationPoll` at the bottom of
+    // this module so `rehydrateRunningPolls` can call it without the
+    // dispatch opts.
     const requestId = reqDto.id;
-    // Cap consecutive network errors so a dead agent can't keep a poll alive
-    // forever; bail to failed state after this many.
-    const MAX_NETWORK_RETRIES = 8;
-    let networkRetries = 0;
-
-    function scheduleNextPoll() {
-      // If the node was cancelled (e.g. user deleted it), stop chaining.
-      if (get().active[rfId] === undefined) return;
-
-      const timerId = setTimeout(async () => {
-        // Also bail if the user cancelled (or deleted the node) while we slept.
-        if (get().active[rfId] === undefined) return;
-        try {
-          const req = await getRequest(requestId);
-          networkRetries = 0;
-
-          if (req.status === "running") {
-            useBoardStore.getState().updateNodeData(rfId, { status: "running" });
-            // Reschedule
-            set((s) => ({
-              active: {
-                ...s.active,
-                [rfId]: { requestId, timerId: null },
-              },
-            }));
-            scheduleNextPoll();
-          } else if (req.status === "done") {
-            // `media_ids` may contain `null` placeholders for variants
-            // the backend marked as partial-failures (e.g. Veo content
-            // filter blocked one of 4 i2v clips while the other 3
-            // succeeded). Keep the positional alignment so the frontend
-            // can map slot i ↔ upstream variant i, but pick the first
-            // non-null entry as the "primary" mediaId for legacy
-            // single-tile UI consumers.
-            const mediaIds = (req.result["media_ids"] as (string | null)[] | undefined) ?? [];
-            const mediaId = mediaIds.find(
-              (m): m is string => typeof m === "string" && m.length > 0,
-            );
-            // Surface the partial-error summary onto data.error while
-            // keeping status="done" — the node still has renderable
-            // variants, but the UI can flag that some slots got blocked.
-            const partialError = (req.result["partial_error"] as string | undefined) ?? null;
-            // Per-slot error codes (aligned to mediaIds) so the detail
-            // viewer can render the exact filter reason on each blocked
-            // tile. `null` length-matched array when nothing's blocked;
-            // missing on legacy / non-video results.
-            const slotErrors =
-              (req.result["slot_errors"] as (string | null)[] | undefined) ?? null;
-            // Stamp the model used onto the node so the detail panel can
-            // show "Banana Pro" / "Quality" etc. — read from req.params
-            // (what was dispatched). Tier-1 UI locks Lite + Quality so
-            // we trust params directly without a backend fallback round-trip.
-            const stampedImageModel =
-              req.type === "gen_image"
-                ? (req.params["image_model"] as string | undefined)
-                : undefined;
-            // For Veo (`gen_video`) the dispatched `video_quality` IS the
-            // model selector (lite / fast / quality / lite_relaxed). For
-            // Omni Flash (`gen_video_omni`) the model is duration-scoped —
-            // derive the Flow model key (abra_r2v_<N>s) from the dispatched
-            // duration so the detail panel can surface the exact variant
-            // that ran (mirrors backend's resolve_omni_flash_model).
-            let stampedVideoQuality: string | undefined;
-            if (req.type === "gen_video") {
-              stampedVideoQuality = req.params["video_quality"] as
-                | string
-                | undefined;
-            } else if (req.type === "gen_video_omni") {
-              const d = req.params["duration_s"] as number | undefined;
-              if (d === 4 || d === 6 || d === 8 || d === 10) {
-                stampedVideoQuality = `abra_r2v_${d}s`;
-              }
-            }
-            useBoardStore.getState().updateNodeData(rfId, {
-              status: "done",
-              mediaId,
-              mediaIds,
-              slotErrors: slotErrors ?? undefined,
-              aiBrief: undefined,
-              aspectRatio: opts.aspectRatio,
-              renderedAt: new Date().toISOString(),
-              error: partialError ?? undefined,
-              ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-              ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
-            });
-            // Persist to backend so the node survives page reload.
-            const dbId = parseInt(rfId, 10);
-            if (!isNaN(dbId) && mediaId) {
-              const n = useBoardStore.getState().nodes.find((x) => x.id === rfId);
-              const d = n?.data;
-              // Backend merges `data`, so only deltas need to ship.
-              // `aiBrief: null` is the explicit "clear" sentinel —
-              // undefined would be dropped by JSON.stringify and leave
-              // the stale brief sitting on the node.
-              patchNode(dbId, {
-                status: "done",
-                data: {
-                  // Persist prompt — without this, reloading the page
-                  // shows "(no prompt)" in the detail panel because the
-                  // dispatch flow only stamps prompt into the in-memory
-                  // store, never to the backend. This used to live in
-                  // the patchNode payload pre-Phase 20 and was
-                  // accidentally dropped during the "only deltas" refactor.
-                  prompt: opts.prompt,
-                  mediaId,
-                  mediaIds,
-                  slotErrors: slotErrors ?? null,
-                  variantCount: d?.variantCount ?? mediaIds.length,
-                  aiBrief: null,
-                  aspectRatio: opts.aspectRatio,
-                  renderedAt: new Date().toISOString(),
-                  // `null` clears stale error from a previous attempt
-                  // when this run was clean; otherwise persist the
-                  // partial summary so it survives reload.
-                  error: partialError ?? null,
-                  ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-                  ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
-                },
-              }).catch(() => {
-                // Non-fatal: the in-memory state is still correct for this session.
-              });
-            }
-            // Generation results always carry a prompt (the one we just
-            // dispatched with), and downstream synth treats prompt as the
-            // source of truth. Vision adds nothing here — skip it.
-            // Manual upload paths in NodeCard.tsx still call
-            // requestAutoBrief; that helper now early-returns if the
-            // target node already has a prompt, so behaviour stays sane
-            // for upload-then-type flows too.
-            set((s) => {
-              const next = { ...s.active };
-              delete next[rfId];
-              return { active: next };
-            });
-          } else if (req.status === "failed" || req.status === "timeout") {
-            // 'timeout' is the dedicated terminal state for the
-            // 5-minute video-gen budget. We render it as a node error
-            // so the card visually flags the stuck run, but tag the
-            // message so the user can tell auto-timeout apart from a
-            // generation failure.
-            const errMsg =
-              req.status === "timeout"
-                ? `Timed out after 5 minutes (${req.error ?? "video_timeout"})`
-                : (req.error ?? "unknown");
-            useBoardStore.getState().updateNodeData(rfId, { status: "error", error: errMsg });
-            set((s) => {
-              const next = { ...s.active };
-              delete next[rfId];
-              return { active: next, error: errMsg };
-            });
-          } else if (req.status === "canceled") {
-            // User-initiated cancel from the activity bell. Don't
-            // stamp the node as 'error' — clear the in-flight state
-            // and leave whatever the node was showing before.
-            useBoardStore.getState().updateNodeData(rfId, { status: "idle" });
-            set((s) => {
-              const next = { ...s.active };
-              delete next[rfId];
-              return { active: next };
-            });
-          } else {
-            // queued — keep polling
-            set((s) => ({
-              active: {
-                ...s.active,
-                [rfId]: { requestId, timerId: null },
-              },
-            }));
-            scheduleNextPoll();
-          }
-        } catch (err) {
-          networkRetries += 1;
-          if (networkRetries >= MAX_NETWORK_RETRIES) {
-            const msg = err instanceof Error ? err.message : "network error";
-            useBoardStore.getState().updateNodeData(rfId, { status: "error", error: msg });
-            set((s) => {
-              const next = { ...s.active };
-              delete next[rfId];
-              return { active: next, error: `Generation poll failed: ${msg}` };
-            });
-            return;
-          }
-          scheduleNextPoll();
-        }
-      }, 1500);
-
-      set((s) => ({
-        active: {
-          ...s.active,
-          [rfId]: { requestId, timerId },
-        },
-      }));
-    }
-
-    // Initialize active entry before first poll
     set((s) => ({
       active: {
         ...s.active,
         [rfId]: { requestId, timerId: null },
       },
     }));
-    scheduleNextPoll();
+    scheduleGenerationPoll(rfId, requestId);
   },
 
   async refineImage(rfId, opts) {
@@ -560,98 +386,16 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       return;
     }
 
-    // Reuse the same poll loop by manually wiring active entry; copy-paste of
-    // dispatchGeneration's poller would be loud, so we do a minimal wait here.
+    // Same shared poll loop as the dispatch path — see
+    // `scheduleGenerationPoll` at the bottom of this module. The
+    // request row carries prompt/aspectRatio in `params` so the
+    // rehydrated result stamp survives a reload without us needing
+    // the original `opts` closure.
     const requestId = reqDto.id;
     set((s) => ({
       active: { ...s.active, [rfId]: { requestId, timerId: null } },
     }));
-
-    const poll = async () => {
-      try {
-        const req = await getRequest(requestId);
-        if (req.status === "running" || req.status === "queued") {
-          useBoardStore.getState().updateNodeData(rfId, { status: req.status });
-          const t = setTimeout(poll, 1500);
-          set((s) => ({
-            active: { ...s.active, [rfId]: { requestId, timerId: t } },
-          }));
-          return;
-        }
-        if (req.status === "done") {
-          const mediaIds = (req.result["media_ids"] as string[] | undefined) ?? [];
-          const mediaId = mediaIds[0];
-          // edit_image still routes through the user's image model setting.
-          const stampedImageModel = req.params["image_model"] as string | undefined;
-          useBoardStore.getState().updateNodeData(rfId, {
-            status: "done",
-            mediaId,
-            mediaIds,
-            aspectRatio: opts.aspectRatio,
-            renderedAt: new Date().toISOString(),
-            ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-          });
-          const dbId = parseInt(rfId, 10);
-          if (!isNaN(dbId) && mediaId) {
-            // Backend merges `data` — ship the new state including
-            // prompt so it survives reload (regression fix: pre-Phase 20
-            // the patchNode payload included prompt; the "only deltas"
-            // refactor dropped it on the assumption prompt was already
-            // persisted, but the dispatch flow never wrote it to backend).
-            patchNode(dbId, {
-              data: {
-                prompt: opts.prompt,
-                mediaId,
-                mediaIds,
-                variantCount: 1,
-                aspectRatio: opts.aspectRatio,
-                renderedAt: new Date().toISOString(),
-                ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-              },
-            }).catch(() => {});
-          }
-          set((s) => {
-            const next = { ...s.active };
-            delete next[rfId];
-            return { active: next };
-          });
-          return;
-        }
-        if (req.status === "canceled") {
-          useBoardStore.getState().updateNodeData(rfId, { status: "idle" });
-          set((s) => {
-            const next = { ...s.active };
-            delete next[rfId];
-            return { active: next };
-          });
-          return;
-        }
-        // failed | timeout — treat as a hard error on the node card so
-        // the user sees something happened. 'timeout' is the auto-cancel
-        // after the 5-minute video-gen budget; tag the message so the
-        // user can tell auto-timeout apart from a real failure.
-        const errMsg =
-          req.status === "timeout"
-            ? `Timed out after 5 minutes (${req.error ?? "video_timeout"})`
-            : (req.error ?? "refine failed");
-        useBoardStore.getState().updateNodeData(rfId, {
-          status: "error",
-          error: errMsg,
-        });
-        set((s) => {
-          const next = { ...s.active };
-          delete next[rfId];
-          return { active: next, error: errMsg };
-        });
-      } catch (err) {
-        const t = setTimeout(poll, 1500);
-        set((s) => ({
-          active: { ...s.active, [rfId]: { requestId, timerId: t } },
-        }));
-        console.warn("refine poll failed", err);
-      }
-    };
-    setTimeout(poll, 800);
+    scheduleGenerationPoll(rfId, requestId);
   },
 
   cancelGeneration(rfId) {
@@ -666,7 +410,228 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     });
   },
 
+  async rehydrateRunningPolls() {
+    // Walk the Request table for any in-flight work the in-memory
+    // `active` map lost when the page reloaded. For each, find the
+    // matching node on the current board and resume the same poll
+    // state machine `dispatchGeneration` uses.
+    //
+    // `type` is restricted to the request types the generation store
+    // knows how to poll — the worker also has a few LLM-driven types
+    // (auto_prompt, vision, etc.) that don't drive a node card, so we
+    // filter them out at the source rather than carrying dead
+    // `requestId`s in `active` that no node maps to.
+    const POLLED_TYPES = ["gen_image", "gen_video", "gen_video_omni", "edit_image"];
+    let items: { id: number; node_id: number | null }[];
+    try {
+      const res = await getActivityList({
+        status: ["queued", "running"],
+        type: POLLED_TYPES,
+        limit: 200,
+      });
+      items = res.items;
+    } catch {
+      // Network blip on boot — the user will see the activity bell
+      // update on the next poll cycle; nothing to do here.
+      return;
+    }
+    if (items.length === 0) return;
+
+    const knownRfIds = new Set(useBoardStore.getState().nodes.map((n) => n.id));
+    for (const it of items) {
+      if (it.node_id == null) continue;
+      const rfId = String(it.node_id);
+      // If the node was deleted from the board while the request was
+      // in flight, the worker still finishes the row — we just don't
+      // surface it. The user removed the node, the variant was a
+      // casualty of that decision.
+      if (!knownRfIds.has(rfId)) continue;
+      // Don't double-attach if a poll for this node is somehow already
+      // alive (e.g. two App instances racing the boot).
+      if (get().active[rfId] !== undefined) continue;
+      // Optimistic UI: flip the node to "running" immediately so the
+      // user sees the spinner the moment the board renders, rather
+      // than after the first 1.5s poll tick.
+      useBoardStore.getState().updateNodeData(rfId, { status: "running" });
+      set((s) => ({
+        active: { ...s.active, [rfId]: { requestId: it.id, timerId: null } },
+      }));
+      scheduleGenerationPoll(rfId, it.id);
+    }
+  },
+
   clearError() {
     set({ error: null });
   },
 }));
+
+// `scheduleGenerationPoll` is a free function so the rehydration path
+// can call it without going through dispatchGeneration. It owns the
+// Request → node state-machine: running/queued → reschedule, done →
+// stamp node + patch backend, failed/timeout → node error,
+// canceled → node idle, network error → retry with cap.
+//
+// All stamp-side-effects (model name, aspect ratio, partial-error
+// summary, slot_errors, prompt) read from `req.params` / `req.result`
+// so this works for both fresh dispatches (where the caller already
+// updated the in-memory node) AND rehydrated polls (where the only
+// source of truth is the Request row the backend is still mutating).
+//
+// We deliberately do NOT take the original `opts.prompt` /
+// `opts.aspectRatio` here — those were captured by the dispatch
+// closure and are lost on reload, but they're also persisted in
+// `req.params` by the request row so re-reading them is correct.
+function scheduleGenerationPoll(rfId: string, requestId: number) {
+  const MAX_NETWORK_RETRIES = 8;
+  let networkRetries = 0;
+
+  function tick() {
+    if (useGenerationStore.getState().active[rfId] === undefined) return;
+    const t = setTimeout(async () => {
+      if (useGenerationStore.getState().active[rfId] === undefined) return;
+      try {
+        const req = await getRequest(requestId);
+        networkRetries = 0;
+        if (req.status === "running" || req.status === "queued") {
+          useBoardStore
+            .getState()
+            .updateNodeData(rfId, { status: req.status });
+          useGenerationStore.setState((s) => ({
+            active: { ...s.active, [rfId]: { requestId, timerId: null } },
+          }));
+          tick();
+          return;
+        }
+        if (req.status === "done") {
+          // `media_ids` may contain `null` placeholders for variants
+          // the backend marked as partial-failures. Keep positional
+          // alignment so the frontend can map slot i ↔ upstream
+          // variant i, but pick the first non-null entry as the
+          // "primary" mediaId for legacy single-tile UI consumers.
+          const mediaIds = (req.result["media_ids"] as (string | null)[] | undefined) ?? [];
+          const mediaId = mediaIds.find(
+            (m): m is string => typeof m === "string" && m.length > 0,
+          );
+          const partialError = (req.result["partial_error"] as string | undefined) ?? null;
+          const slotErrors =
+            (req.result["slot_errors"] as (string | null)[] | undefined) ?? null;
+          // Model is read from req.params (what was dispatched) so the
+          // stamp survives a reload — the in-memory `opts` from
+          // dispatchGeneration isn't available here.
+          const stampedImageModel =
+            req.type === "gen_image"
+              ? (req.params["image_model"] as string | undefined)
+              : undefined;
+          let stampedVideoQuality: string | undefined;
+          if (req.type === "gen_video") {
+            stampedVideoQuality = req.params["video_quality"] as
+              | string
+              | undefined;
+          } else if (req.type === "gen_video_omni") {
+            const d = req.params["duration_s"] as number | undefined;
+            if (d === 4 || d === 6 || d === 8 || d === 10) {
+              stampedVideoQuality = `abra_r2v_${d}s`;
+            }
+          }
+          // Aspect ratio also lives on req.params (backend echoes what
+          // was dispatched) — falling back keeps the result stamp
+          // honest across reloads even if the dispatch closure's
+          // `opts.aspectRatio` is gone.
+          const aspectRatio = (req.params["aspect_ratio"] as string | undefined) ?? undefined;
+          // Prompt the same way: backend stored what the user asked
+          // for, so rehydrate from there rather than the in-memory
+          // dispatch closure.
+          const prompt = (req.params["prompt"] as string | undefined) ?? undefined;
+          useBoardStore.getState().updateNodeData(rfId, {
+            status: "done",
+            mediaId,
+            mediaIds,
+            slotErrors: slotErrors ?? undefined,
+            aiBrief: undefined,
+            aspectRatio,
+            renderedAt: new Date().toISOString(),
+            error: partialError ?? undefined,
+            ...(prompt ? { prompt } : {}),
+            ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
+            ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
+          });
+          const dbId = parseInt(rfId, 10);
+          if (!isNaN(dbId) && mediaId) {
+            const n = useBoardStore.getState().nodes.find((x) => x.id === rfId);
+            const d = n?.data;
+            patchNode(dbId, {
+              status: "done",
+              data: {
+                prompt: prompt ?? null,
+                mediaId,
+                mediaIds,
+                slotErrors: slotErrors ?? null,
+                variantCount: d?.variantCount ?? mediaIds.length,
+                aiBrief: null,
+                aspectRatio: aspectRatio ?? null,
+                renderedAt: new Date().toISOString(),
+                error: partialError ?? null,
+                ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
+                ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
+              },
+            }).catch(() => {});
+          }
+          useGenerationStore.setState((s) => {
+            const next = { ...s.active };
+            delete next[rfId];
+            return { active: next };
+          });
+          return;
+        }
+        if (req.status === "failed" || req.status === "timeout") {
+          // 'timeout' is the dedicated terminal state for the
+          // 5-minute video-gen budget. We render it as a node error
+          // so the card visually flags the stuck run, but tag the
+          // message so the user can tell auto-timeout apart from a
+          // generation failure.
+          const errMsg =
+            req.status === "timeout"
+              ? `Timed out after 5 minutes (${req.error ?? "video_timeout"})`
+              : (req.error ?? "unknown");
+          useBoardStore
+            .getState()
+            .updateNodeData(rfId, { status: "error", error: errMsg });
+          useGenerationStore.setState((s) => {
+            const next = { ...s.active };
+            delete next[rfId];
+            return { active: next, error: errMsg };
+          });
+          return;
+        }
+        if (req.status === "canceled") {
+          useBoardStore.getState().updateNodeData(rfId, { status: "idle" });
+          useGenerationStore.setState((s) => {
+            const next = { ...s.active };
+            delete next[rfId];
+            return { active: next };
+          });
+          return;
+        }
+      } catch (err) {
+        networkRetries += 1;
+        if (networkRetries >= MAX_NETWORK_RETRIES) {
+          const msg = err instanceof Error ? err.message : "network error";
+          useBoardStore
+            .getState()
+            .updateNodeData(rfId, { status: "error", error: msg });
+          useGenerationStore.setState((s) => {
+            const next = { ...s.active };
+            delete next[rfId];
+            return { active: next, error: `Generation poll failed: ${msg}` };
+          });
+          return;
+        }
+        tick();
+      }
+    }, 1500);
+    useGenerationStore.setState((s) => ({
+      active: { ...s.active, [rfId]: { requestId, timerId: t } },
+    }));
+  }
+  tick();
+}
