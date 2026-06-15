@@ -733,6 +733,32 @@ class FlowSDK:
                 continue
             status_code = resp.get("status")
             if isinstance(status_code, int) and status_code >= 400 and status_code != 404:
+                # 5xx and 429 from `/v1/media/<id>` are TRANSIENT: Flow's
+                # media endpoint can briefly 500 (or 429 under load) while
+                # the workflow is still rendering. The dispatch on
+                # Google's side is still in `MEDIA_GENERATION_STATUS_*`
+                # progress, so terminating the poll here would falsely
+                # fail the variant. Keep `done=False` and let the worker's
+                # outer poll loop retry on the next cycle. 4xx (non-404)
+                # stays terminal — that's a real per-op error (e.g. a
+                # content filter on the workflow entry, or auth failure
+                # that the token-rotation path won't recover from).
+                transient = status_code == 429 or status_code >= 500
+                if transient:
+                    logger.info(
+                        "workflow poll transient %s for %s — will retry",
+                        status_code, mid[:8],
+                    )
+                    ops_summary.append(
+                        {
+                            "name": name,
+                            "done": False,
+                            "media_entries": [],
+                            "status": None,
+                            "error": None,
+                        }
+                    )
+                    continue
                 # Surface the inner Flow error (e.g. content filter).
                 inner = _extract_inner_api_error(resp)
                 ops_summary.append(
