@@ -92,7 +92,7 @@ function DropAddPopover({
       className="drop-popover"
       style={{ left: popover.clientX + 8, top: popover.clientY + 8 }}
       role="menu"
-      aria-label="Add connected node"
+      aria-label="Thêm ô được kết nối"
     >
       <button type="button" className="drop-popover__btn" onClick={() => handle("image")}>
         <span className="drop-popover__icon">▣</span> Image

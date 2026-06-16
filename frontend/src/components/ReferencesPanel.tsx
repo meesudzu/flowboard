@@ -37,8 +37,8 @@ export function ReferencesPanel() {
         type="button"
         className="references-panel__toggle-tab"
         onClick={togglePanel}
-        aria-label={panelOpen ? "Collapse references" : "Open references"}
-        title={panelOpen ? "Collapse library" : "Open library"}
+        aria-label={panelOpen ? "Thu gọn tham chiếu" : "Mở tham chiếu"}
+        title={panelOpen ? "Thu gọn thư viện" : "Mở thư viện"}
       >
         <span aria-hidden="true">{panelOpen ? "›" : "★"}</span>
       </button>
@@ -56,7 +56,7 @@ export function ReferencesPanel() {
             type="button"
             className="references-panel__close"
             onClick={togglePanel}
-            aria-label="Collapse references panel"
+            aria-label="Thu gọn bảng tham chiếu"
             title="Collapse"
           >
             ›
@@ -66,10 +66,10 @@ export function ReferencesPanel() {
         <div className="references-panel__search">
           <input
             type="text"
-            placeholder="🔍 search references…"
+            placeholder="🔍 tìm kiếm tham chiếu…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search references"
+            aria-label="Tìm kiếm tham chiếu"
           />
         </div>
 
@@ -81,7 +81,7 @@ export function ReferencesPanel() {
 
         {!loading && items.length === 0 && (
           <div className="references-panel__empty">
-            Save a variant from any image node to start your library.
+            Lưu một biến thể từ bất kỳ ô ảnh nào để bắt đầu thư viện.
           </div>
         )}
 
@@ -300,7 +300,7 @@ function ReferenceCard({
             e.stopPropagation();
             onTogglePin();
           }}
-          aria-label={item.pinned ? "Unpin reference" : "Pin reference"}
+          aria-label={item.pinned ? "Bỏ ghim tham chiếu" : "Ghim tham chiếu"}
           title={item.pinned ? "Unpin" : "Pin to top"}
         >
           {item.pinned ? "★" : "☆"}
@@ -312,7 +312,7 @@ function ReferenceCard({
             e.stopPropagation();
             setRenaming(true);
           }}
-          aria-label="Rename reference"
+          aria-label="Đổi tên tham chiếu"
           title="Rename"
         >
           ✎
@@ -327,13 +327,13 @@ function ReferenceCard({
           disabled={deleting}
           aria-label={
             confirmDelete
-              ? "Confirm delete reference"
-              : "Delete reference"
+              ? "Xác nhận xoá tham chiếu"
+              : "Xoá tham chiếu"
           }
           title={
             confirmDelete
-              ? "Click again to confirm — auto-cancels in 3s"
-              : "Delete (underlying image stays in storage)"
+              ? "Bấm lần nữa để xác nhận — tự huỷ sau 3 giây"
+              : "Xoá (ảnh gốc vẫn còn trong bộ nhớ)"
           }
         >
           {deleting ? "…" : confirmDelete ? "Confirm?" : "🗑"}

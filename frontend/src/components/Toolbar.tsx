@@ -2,7 +2,6 @@ import { useState, useRef, type KeyboardEvent } from "react";
 import { useBoardStore } from "../store/board";
 import { ActivityBell } from "./activity/ActivityBell";
 import { AiProviderBadge } from "./AiProviderBadge";
-import { SponsorButton } from "./SponsorDialog";
 
 export function Toolbar() {
   const boardName = useBoardStore((s) => s.boardName);
@@ -45,23 +44,22 @@ export function Toolbar() {
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitEdit}
           onKeyDown={onKeyDown}
-          aria-label="Board name"
+          aria-label="Tên bảng vẽ"
         />
       ) : (
         <button
           className="toolbar-name-btn"
           onClick={startEdit}
-          aria-label="Rename board"
-          title="Click to rename"
+          aria-label="Đổi tên bảng vẽ"
+          title="Bấm để đổi tên"
         >
-          {boardName || "Untitled"}
+          {boardName || "Chưa đặt tên"}
         </button>
       )}
 
       <div className="toolbar-actions">
         <ActivityBell />
         <AiProviderBadge />
-        <SponsorButton />
       </div>
     </div>
   );

@@ -62,7 +62,7 @@ export function ProjectSidebar() {
         (b) => !b.exists_on_flow,
       ).length;
       if (orphans === 0) {
-        setSyncSummary("All boards already on Flow ✓");
+        setSyncSummary("Tất cả bảng vẽ đã có trên Flow ✓");
       } else {
         const res = await syncBoardsUpToFlow();
         await refreshStatus();
@@ -70,12 +70,12 @@ export function ProjectSidebar() {
         const fail = res.failed.length;
         setSyncSummary(
           fail === 0
-            ? `Pushed ${ok} board${ok !== 1 ? "s" : ""} to Flow ✓`
-            : `Pushed ${ok}, ${fail} failed — see agent log`,
+            ? `Đã đẩy ${ok} board${ok !== 1 ? "s" : ""} to Flow ✓`
+            : `Đã đẩy ${ok}, ${fail} failed — xem log của agent`,
         );
       }
     } catch (err) {
-      setSyncError(err instanceof Error ? err.message : "sync failed");
+      setSyncError(err instanceof Error ? err.message : "đồng bộ thất bại");
     } finally {
       setSyncing(false);
     }
@@ -301,7 +301,7 @@ export function ProjectSidebar() {
                         onClick={() =>
                           setOpenMenuId((cur) => (cur === b.id ? null : b.id))
                         }
-                        aria-label="Project actions"
+                        aria-label="Thao tác dự án"
                       >
                         ⋯
                       </button>
