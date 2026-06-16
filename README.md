@@ -629,6 +629,11 @@ clean (frontend). Caveats:
   story videos** (multi-scene, narration, thumbnails). Flowboard
   borrows the bridge architecture.
 
+## Operation
+
+- **Run as a background service (macOS)**: auto-start on login, auto-restart on crash, no terminal needed — see [`docs/BACKGROUND-SERVICE.md`](docs/BACKGROUND-SERVICE.md) for the step-by-step guide.
+- **Dev workflow**: `flowboard dev` (foreground with `--reload`) for backend; `cd frontend && npm run dev` in a 2nd terminal for React HMR; reload the Chrome extension from `chrome://extensions` after editing `extension/*.js`.
+
 ## License
 
 MIT (proposed — license file pending).
