@@ -54,7 +54,7 @@ export function Toaster() {
         <button
           className="toaster__close"
           onClick={clearError}
-          aria-label="Dismiss error"
+          aria-label="Bỏ qua lỗi"
         >
           ×
         </button>

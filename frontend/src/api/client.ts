@@ -572,10 +572,12 @@ export async function uploadImageFromUrl(
 
 
 // ── LLM provider Settings ─────────────────────────────────────────────────
-// See .omc/plans/multi-llm-provider-legacy.md → UI Specification → Frontend ↔
-// backend contract for the full shape.
+// MiniMax-only build: there's a single LLM provider (MiniMax) in this
+// frontend/backend pair. The earlier multi-provider design (Claude /
+// Gemini / OpenAI Codex) was dropped — the cloud-VPS image doesn't
+// bundle any of those CLIs. Backend route: /api/llm/*.
 
-export type LLMProviderName = "claude" | "gemini" | "openai";
+export type LLMProviderName = "minimax";
 export type LLMFeature = "auto_prompt" | "vision" | "planner";
 export type LLMProviderMode = "cli" | "api" | "none";
 export type LLMLastError =
@@ -703,11 +705,16 @@ export async function getActivityList(opts?: {
   limit?: number;
   beforeId?: number;
   type?: string[];
+  // Comma-separated status filter (e.g. "queued,running") — the route
+  // whitelists values, so a typo surfaces as a 422 instead of an empty
+  // list (used by rehydrateRunningPolls to find in-flight work on boot).
+  status?: string[];
 }): Promise<{ items: ActivityListItem[]; next_before_id: number | null }> {
   const search = new URLSearchParams();
   if (opts?.limit) search.set("limit", String(opts.limit));
   if (opts?.beforeId) search.set("before_id", String(opts.beforeId));
   if (opts?.type && opts.type.length > 0) search.set("type", opts.type.join(","));
+  if (opts?.status && opts.status.length > 0) search.set("status", opts.status.join(","));
   const q = search.toString();
   const res = await fetch(`/api/activity${q ? `?${q}` : ""}`);
   if (!res.ok) throw new Error(`getActivityList: ${res.status}`);

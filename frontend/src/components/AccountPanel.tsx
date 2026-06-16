@@ -216,7 +216,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             {(tier || creditsLabel) && (
               <div
                 className="account-panel__status-row"
-                title={tier ? `${tierLabel}${creditsLabel ? ` · ${creditsLabel} credits remaining` : ""}` : undefined}
+                title={tier ? `${tierLabel}${creditsLabel ? ` · ${creditsLabel} credits còn lại` : ""}` : undefined}
               >
                 {tier && (
                   <span
@@ -232,7 +232,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                 {creditsLabel && (
                   <span
                     className="account-panel__credits-inline"
-                    title={`${creditsLabel} credits remaining`}
+                    title={`${creditsLabel} credits còn lại`}
                   >
                     <span className="account-panel__credits-value">{creditsLabel}</span>
                   </span>
@@ -255,13 +255,13 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                   ⚠ Extension not detected
                 </span>
                 <span className="account-panel__scan-hint-text">
-                  Refresh the Flow tab, then reload the Flowboard extension.
+                  Tải lại tab Flow, rồi tải lại tiện ích Flowboard.
                 </span>
                 <button
                   type="button"
                   className="account-panel__scan-btn"
                   onClick={handleScan}
-                  title="Scan again for an extension connection"
+                  title="Quét lại kết nối tiện ích"
                 >
                   Try again
                 </button>
@@ -272,7 +272,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                 className="account-panel__scan-btn"
                 onClick={handleScan}
                 disabled={scanState === "scanning"}
-                title="Scan for an extension connection and re-fetch user info"
+                title="Quét kết nối tiện ích và tải lại thông tin người dùng"
               >
                 {scanState === "scanning" ? "Scanning…" : "🔍 Scan extension"}
               </button>
@@ -284,7 +284,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             className="account-panel__cog"
             onClick={() => setOpen((v) => !v)}
-            aria-label="Open settings"
+            aria-label="Mở cài đặt"
             title="Settings"
           >
             ⚙
@@ -323,7 +323,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
               Tier unknown
             </span>
             <span className="account-panel__tier-warning-text">
-              Open Flow once so the extension can detect your plan.
+              Mở Flow một lần để tiện ích nhận diện gói của bạn.
             </span>
           </div>
           <a
@@ -332,7 +332,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Flow ↗
+            Mở trong Flow ↗
           </a>
         </div>
       )}

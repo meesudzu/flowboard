@@ -9,23 +9,22 @@ import {
 import { AiProviderDialog } from "./AiProviderDialog";
 
 /**
- * Compact toolbar entry point for the AI Provider stack. Sits to the
- * left of the Sponsor button. Click opens the AiProviderDialog.
+ * Compact toolbar entry point for the AI Provider stack. MiniMax-only
+ * build: the badge always shows "MiniMax" (or "Setup AI" when no key
+ * is configured). Click opens the AiProviderDialog.
  *
  * Three render states:
  *  1. Not configured — `config.configured === false`. Renders a
  *     "Setup AI" CTA in warning style. The forced-setup gate at the App
  *     level usually opens the dialog before the user even sees this,
  *     but the badge stays consistent if they cancel out.
- *  2. Configured + healthy — single provider name + ✓ icon.
- *  3. Configured + unhealthy — single provider name + ⚠ (CLI got
- *     uninstalled / key revoked since setup). Click to reconfigure.
+ *  2. Configured + healthy — "MiniMax" label + ✓ icon.
+ *  3. Configured + unhealthy — "MiniMax" label + ⚠ (key revoked
+ *     since setup, or balance exhausted). Click to reconfigure.
  */
 
 const PROVIDER_LABEL: Record<LLMProviderName, string> = {
-  claude: "Claude",
-  gemini: "Gemini",
-  openai: "OpenAI",
+  minimax: "MiniMax",
 };
 
 const POLL_INTERVAL_MS = 30_000;
@@ -95,8 +94,8 @@ export function AiProviderBadge() {
           type="button"
           className="ai-provider-badge ai-provider-badge--setup"
           onClick={() => setOpen(true)}
-          title="Pick an AI provider to power Auto-Prompt, Vision, and Planner."
-          aria-label="Set up AI provider"
+          title="Chọn nhà cung cấp AI cho Tự viết prompt, Xem ảnh và Lập kế hoạch."
+          aria-label="Cài đặt nhà cung cấp AI"
         >
           <span className="ai-provider-badge__icon" aria-hidden="true">🤖</span>
           <span className="ai-provider-badge__label">Setup AI</span>

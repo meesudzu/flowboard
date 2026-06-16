@@ -54,7 +54,7 @@ export function ActivityDropdown({
           type="button"
           className="activity-dropdown__close"
           onClick={onClose}
-          aria-label="Close activity"
+          aria-label="Đóng hoạt động"
         >
           ×
         </button>
@@ -66,7 +66,7 @@ export function ActivityDropdown({
         )}
         {!loading && items.length === 0 && (
           <div className="activity-dropdown__placeholder">
-            No activity yet. Run a generation or open Auto-Prompt to populate the feed.
+            Chưa có hoạt động nào. Tạo ảnh hoặc mở Tự viết prompt để bắt đầu.
           </div>
         )}
         {items.map((item) => (

@@ -50,7 +50,7 @@ export function buildStoryboardPrompt(
   aspectRatio?: string,
 ): string {
   const { rows, cols, total } = resolveStoryboardLayout(grid, aspectRatio);
-  const t = topic.trim() || "untitled story";
+  const t = topic.trim() || "câu chuyện chưa đặt tên";
   // Verbose template — earlier short version produced overlapping borders
   // (no clear tile separators) and no per-tile captions, so the result
   // read like a montage instead of a storyboard. This version pins the
@@ -66,15 +66,15 @@ export function buildStoryboardPrompt(
   // label are medium-agnostic. Only layout / numbering / caption rules
   // remain — those are the actual non-negotiables for a readable grid.
   return [
-    `Create a visual storyboard for "${t}" as a SINGLE composite IMAGE`,
+    `Tạo storyboard trực quan cho "${t}" dưới dạng MỘT ảnh ghép DUY NHẤT`,
     `arranged in a ${rows}x${cols} grid (${rows} rows, ${cols} columns, ${total} tiles total).`,
-    `Each tile shows one beat of the story.`,
-    `Tiles read left-to-right, top-to-bottom in narrative order (1 → ${total}).`,
-    `STRICT layout rules:`,
-    `  • Clean WHITE MARGINS between every tile — no overlapping borders, no bleed between tiles.`,
-    `  • Each tile is rectangular, identical size, sharply separated from its neighbors.`,
-    `  • In the TOP-LEFT corner of every tile, place a small NUMBER label (1, 2, 3, …, ${total}) — readable and consistent across all tiles.`,
-    `  • BENEATH each tile (outside the picture area, in the white margin below), print a SHORT one-sentence caption describing the action of that beat. Use clean, legible text. Captions in the same language as the topic.`,
+    `Mỗi ô thể hiện một nhịp của câu chuyện.`,
+    `Các ô đọc từ trái sang phải, trên xuống dưới theo thứ tự kể chuyện (1 → ${total}).`,
+    `Quy tắc bố cục NGHIÊM NGẶT:`,
+    `  • LỀ TRẮNG sạch giữa các ô — không viền chồng, không tràn giữa các ô.`,
+    `  • Mỗi ô là hình chữ nhật, kích thước giống nhau, tách bạch rõ ràng với ô kế bên.`,
+    `  • Ở góc TRÊN-TRÁI của mỗi ô, đặt nhãn SỐ nhỏ (1, 2, 3, …, ${total}) — dễ đọc và đồng nhất giữa tất cả các ô.`,
+    `  • BÊN DƯỚI mỗi ô (ngoài vùng ảnh, trong lề trắng phía dưới), in một CHÚ THÍCH ngắn một câu mô tả hành động của nhịp đó. Dùng chữ rõ ràng, dễ đọc. Chú thích bằng cùng ngôn ngữ với chủ đề.`,
   ].join(" ");
 }
 
@@ -91,5 +91,5 @@ export function buildStoryboardVideoPrompt(
   grid: StoryboardGrid = "2x2",
 ): string {
   const lastFrame = totalPanels(grid);
-  return `A 10-seconds cinematic animated film trailer following narrative progression from exactly frame 1 to frame ${lastFrame} of the image reference`;
+  return `Một trailer phim hoạt hình điện ảnh 10 giây theo tiến trình kể chuyện từ chính xác khung hình 1 đến khung hình ${lastFrame} của ảnh tham chiếu`;
 }

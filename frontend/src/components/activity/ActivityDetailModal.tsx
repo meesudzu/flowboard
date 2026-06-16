@@ -114,7 +114,7 @@ export function ActivityDetailModal({ activityId, onClose }: ActivityDetailModal
             type="button"
             className="activity-detail__close"
             onClick={onClose}
-            aria-label="Close detail"
+            aria-label="Đóng chi tiết"
           >
             ×
           </button>

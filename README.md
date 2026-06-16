@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI"/>
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" alt="React 18"/>
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/React%20Flow-12-8A2BE2?logo=react&logoColor=white" alt="React Flow"/>
+  <img src="https://img.shields.io/badge/React%20Flow-12-8A2BE2?logo=reactflow&logoColor=white" alt="React Flow"/>
   <img src="https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome MV3"/>
   <img src="https://img.shields.io/badge/Veo%203.1-i2v-FF6F00?logo=google&logoColor=white" alt="Veo 3.1"/>
   <img src="https://img.shields.io/badge/Flow-Pro%20%2F%20Ultra%20only-EA4335?logo=google&logoColor=white" alt="Flow Pro / Ultra only"/>
@@ -20,83 +20,35 @@
 
 ---
 
-### ☕ Sponsor this project
-
-<table align="center">
-  <tr>
-    <td align="center" width="50%">
-      <a href="docs/assets/sponsor-qr-vn.jpg">
-        <img src="docs/assets/sponsor-qr-vn.jpg" alt="Vietnam QR — MoMo / VietQR / napas247" width="240" />
-      </a><br/>
-      <sub>📱 <b>Vietnam</b><br/>MoMo · VietQR · napas247</sub>
-    </td>
-    <td align="center" width="50%">
-      <a href="docs/assets/sponsor-qr-binance.png">
-        <img src="docs/assets/sponsor-qr-binance.png" alt="Binance Pay QR — Cris Ng" width="240" />
-      </a><br/>
-      <sub>💰 <b>Binance Pay</b><br/>Crypto / cross-border</sub>
-    </td>
-  </tr>
-</table>
-
 <p align="center">
-  🌍 <b>International (card):</b>
-  <a href="https://ko-fi.com/crisnguyen95">
-    <img src="https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=kofi&logoColor=white" alt="Ko-fi" />
-  </a>
+  <b>Một không gian làm việc dạng bảng vẽ vô hạn, chỉ chạy trên máy bạn, phục vụ quy trình tạo nội dung bằng AI.</b><br/>
+  Ghép các nhân vật, sản phẩm, bối cảnh và video thành một "sơ đồ" có hướng đi. Mọi thao tác tạo ảnh/video đều đi qua một tiện ích Chrome, tiện ích này sẽ nói chuyện với Google Flow (Veo 3.1 / GEM_PIX_2) thay cho bạn.<br/>
+  Mỗi ô (node) đều có thể dùng lại, mỗi đường nối (edge) là một mối liên hệ dữ liệu thật, mỗi phiên bản đều có thể tạo lại độc lập.
 </p>
 
-<p align="center">
-  <sub><i>(yes — I moved this up here on purpose. Was afraid nobody scrolls past the badges 😅)</i></sub>
-</p>
-
----
-
-<p align="center">
-  <b>A local-only, single-user infinite-canvas workspace for AI media workflows.</b><br/>
-  Compose characters, products, scenes, and videos as a directed graph. Drive generation through a Chrome extension that proxies requests to Google Flow (Veo 3.1 / GEM_PIX_2).<br/>
-  Every node is reusable, every edge is a real data-dependency, every variant is independently regenerable.
-</p>
-
-> **⚠ Hard requirements — read this before cloning:**
+> **⚠ Yêu cầu bắt buộc — đọc phần này trước khi cài đặt:**
 >
-> 1. **Google Flow plan: `Pro` or `Ultra` only.** Veo 3.1 i2v + GEM_PIX_2
->    are gated to paid tiers. The free tier and trial accounts cannot
->    drive video generation, so Flowboard cannot work on them. Confirm
->    your plan at [labs.google/fx](https://labs.google/fx/tools/flow)
->    before installing.
-> 2. **Chrome extension is mandatory.** All generation requests are
->    proxied through `extension/` (Chrome MV3) so the agent can ride
->    your authenticated Flow session + reCAPTCHA token. Without the
->    extension loaded and connected to `labs.google/fx/tools/flow`, the
->    `▶ Generate` button does nothing.
-> 3. **One LLM CLI on `PATH` for auto-prompt / vision / planner.**
->    Flowboard ships a swappable provider layer — pick one in
->    `Settings → AI Providers`:
+> 1. **Gói Google Flow: chỉ dùng được gói `Pro` hoặc `Ultra`.** Tính năng tạo video Veo 3.1 i2v và ảnh GEM_PIX_2 chỉ mở cho tài khoản trả phí. Tài khoản miễn phí và tài khoản dùng thử không chạy được chức năng tạo video, nên Flowboard sẽ không hoạt động trên đó. Vui lòng kiểm tra gói của bạn tại [labs.google/fx](https://labs.google/fx/tools/flow) trước khi cài.
+> 2. **Bắt buộc phải cài tiện ích Chrome.** Mọi yêu cầu tạo ảnh/video đều được chuyển tiếp qua thư mục `extension/` (Chrome MV3) để chương trình có thể dùng phiên đăng nhập Flow + mã reCAPTCHA của bạn. Nếu chưa cài tiện ích và chưa kết nối với `labs.google/fx/tools/flow`, nút `▶ Generate` sẽ không hoạt động.
+> 3. **Cần có ít nhất một CLI LLM trong `PATH`** để dùng tính năng tự viết prompt / xem ảnh / lập kế hoạch. Flowboard có sẵn lớp chuyển đổi nhà cung cấp — bạn chọn trong `Settings → AI Providers`:
 >
->    - **Claude Code** (default, recommended) —
+>    - **Claude Code** (mặc định, khuyên dùng) —
 >      [`@anthropic-ai/claude-code`](https://docs.claude.com/claude-code/install) ·
->      OAuth via your Claude subscription · fully tested in production.
+>      Đăng nhập bằng tài khoản Claude của bạn · đã chạy thử kỹ.
 >    - **Gemini CLI** — [`@google/gemini-cli`](https://github.com/google-gemini/gemini-cli) ·
->      OAuth via Google AI · tested live; ~15 s slower per call than
->      Claude due to subprocess cold-start.
+>      Đăng nhập bằng tài khoản Google AI · đã chạy thử; mỗi lần gọi chậm hơn Claude khoảng 15 giây vì phải khởi động tiến trình con.
 >    - **OpenAI Codex** —
->      [`@openai/codex`](https://github.com/openai/codex) · OAuth via
->      ChatGPT Plus/Pro · provider class implemented + auto-detected
->      but **not yet smoke-tested end-to-end**; treat as beta.
+>      [`@openai/codex`](https://github.com/openai/codex) · Đăng nhập bằng tài khoản ChatGPT Plus/Pro · đã viết mã cho lớp nhà cung cấp + tự phát hiện, nhưng **chưa chạy thử đầu cuối**; coi như bản beta.
 >
->    Flowboard does not call any cloud LLM API directly — every
->    auto-prompt / vision / planner round-trip shells out to the CLI
->    you've connected, so the cost lives on your existing AI
->    subscription.
+>    Flowboard không gọi thẳng đến bất kỳ API LLM đám mây nào — mọi vòng gọi tự viết prompt / xem ảnh / lập kế hoạch đều gọi qua CLI bạn đã cài, nên chi phí sẽ nằm trên gói AI bạn đang trả.
 
 <p align="center">
-  <a href="#why">Why</a> ·
-  <a href="#showcase">Showcase</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#architecture">Architecture</a> ·
-  <a href="#quickstart">Quickstart</a> ·
-  <a href="#features">Features</a>
+  <a href="#tai-sao-can-flowboard">Tại sao cần Flowboard</a> ·
+  <a href="#minh-hoa">Minh họa</a> ·
+  <a href="#flowboard-hoat-dong-the-nao">Flowboard hoạt động thế nào</a> ·
+  <a href="#kien-truc-tong-the">Kiến trúc tổng thể</a> ·
+  <a href="#huong-dan-cai-dat-nhanh">Hướng dẫn cài đặt nhanh</a> ·
+  <a href="#cac-tinh-nang-chinh">Các tính năng chính</a>
 </p>
 
 ---
@@ -107,57 +59,46 @@
   <a href="docs/assets/flowboard-intro.mp4">
     <img src="docs/assets/flowboard-intro.gif" alt="Flowboard end-to-end walkthrough" width="720" />
   </a><br/>
-  <sub>End-to-end walkthrough — refs → composed image → multi-source i2v. Click for full-quality MP4.</sub>
+  <sub>Video demo đầy đủ: từ ảnh tham chiếu → ảnh ghép → nhiều video từ nhiều nguồn. Bấm vào để xem bản MP4 chất lượng cao.</sub>
 </p>
 
 ---
 
-## Why
+## Tại sao cần Flowboard
 
-E-commerce video creative is repetitive: same model, same product, many
-scenes, many short clips. Building it by hand in a generic Veo / Imagen UI
-means re-uploading the same character ref every time, re-typing the same
-"young Korean woman in the cream cropped tee" prompt every time, and
-losing track of which 4-variant generation came from which source still.
+Khi làm video quảng cáo cho thương mại điện tử, công việc thường lặp đi lặp lại: cùng một người mẫu, cùng một sản phẩm, nhưng phải tạo ra nhiều bối cảnh, nhiều đoạn clip ngắn khác nhau. Nếu làm thủ công trên giao diện Veo / Imagen thông thường, bạn sẽ phải tải lại cùng một ảnh tham chiếu nhân vật, gõ lại cùng một mô tả kiểu "cô gái Hàn Quốc trẻ mặc áo thun kem croptop", và rất dễ quên mất phiên bản 4 ảnh kia sinh ra từ ảnh gốc nào.
 
-Flowboard treats the workflow as a graph:
+Flowboard biến quy trình này thành một **sơ đồ** trực quan:
 
-- **Refs are nodes** — upload a character once, upload a product once.
-- **Composed shots are nodes** — `(Character) + (Product) → Image`.
-- **Videos are nodes** — `(Image) → Video` via i2v, with multi-source batch
-  so a 4-variant image spawns 4 videos in one click.
-- **Prompts are auto-synthesised** from upstream context (the configured
-  LLM CLI's vision pass describes each ref → a downstream generator
-  gets the brief spliced into a fashion-editorial prompt). Switch
-  provider in `Settings → AI Providers`; defaults to Claude Code.
+- **Ảnh tham chiếu là các ô trên sơ đồ** — tải ảnh nhân vật lên một lần, tải ảnh sản phẩm lên một lần.
+- **Bức ảnh ghép là một ô** — `(Nhân vật) + (Sản phẩm) → Ảnh`.
+- **Video là một ô** — `(Ảnh) → Video` thông qua i2v, có thể tạo hàng loạt: ảnh gốc có 4 phiên bản thì tạo ra 4 video chỉ với một cú bấm.
+- **Prompt (câu mô tả) được AI tự soạn** dựa trên các ảnh phía trên (LLM có cấu hình vision sẽ mô tả từng ảnh tham chiếu → phần generator phía dưới ghép vào prompt theo phong cách tạp chí thời trang). Bạn có thể đổi nhà cung cấp AI trong `Settings → AI Providers`; mặc định là Claude Code.
 
-The result: one source-of-truth canvas for an entire campaign.
+Kết quả: chỉ cần một bảng vẽ duy nhất là bạn quản lý được cả một chiến dịch.
 
 ---
 
-## Showcase
+## Minh họa
 
-The graph below is a real export from a board in this project — two ref
-nodes (`#op4v` product, `#0p1u` model) feeding three scene compositions
-and three downstream videos. Every image and clip below was rendered by
-the pipeline in this repo.
+Sơ đồ bên dưới là bản xuất thật từ một bảng vẽ trong dự án — hai ô tham chiếu (`#op4v` sản phẩm, `#0p1u` người mẫu) cung cấp dữ liệu cho ba ảnh ghép và ba video phía dưới. Mọi ảnh và clip bạn thấy đều được tạo ra bởi chính quy trình trong repo này.
 
 <p align="center">
-  <img src="docs/assets/canvas-overview.png" alt="Flowboard canvas — real board export" width="100%" /><br/>
-  <sub>The actual canvas in the app: 2 refs (left) → studio composition <code>#qowj</code> (centre) → scene-variant images (autumn / Seoul / Myeongdong) → 3 video nodes with 4-up i2v variant grids (right).</sub>
+  <img src="docs/assets/canvas-overview.png" alt="Bảng vẽ Flowboard — xuất thật từ một dự án" width="100%" /><br/>
+  <sub>Bảng vẽ thật trong ứng dụng: 2 ô tham chiếu (bên trái) → ảnh ghép trong studio <code>#qowj</code> (ở giữa) → ảnh biến thể bối cảnh (mùa thu / Seoul / Myeongdong) → 3 ô video với 4 biến thể i2v mỗi ô (bên phải).</sub>
 </p>
 
 ```mermaid
 graph LR
-    A[#op4v Visual asset<br/>cream The Famous tee]:::ref
-    B[#0p1u Character<br/>Korean female model]:::ref
-    C[#qowj Image<br/>studio composition]
-    D[#nkov Image<br/>autumn road · 4 variants]
-    E[#l7qd Image<br/>Seoul street · 4 variants]
-    F[#xky5 Image<br/>Myeongdong dusk · 4 variants]
-    G[#sncj Video<br/>studio motion]:::video
-    H[#bwr4 Video<br/>autumn motion · 4 variants]:::video
-    I[#uv1p Video<br/>Seoul motion · 4 variants]:::video
+    A[#op4v Sản phẩm<br/>áo thun kem The Famous]:::ref
+    B[#0p1u Nhân vật<br/>người mẫu nữ Hàn Quốc]:::ref
+    C[#qowj Ảnh<br/>ảnh ghép trong studio]
+    D[#nkov Ảnh<br/>đường mùa thu · 4 biến thể]
+    E[#l7qd Ảnh<br/>đường phố Seoul · 4 biến thể]
+    F[#xky5 Ảnh<br/>hoàng hôn Myeongdong · 4 biến thể]
+    G[#sncj Video<br/>chuyển động trong studio]:::video
+    H[#bwr4 Video<br/>chuyển động mùa thu · 4 biến thể]:::video
+    I[#uv1p Video<br/>chuyển động Seoul · 4 biến thể]:::video
 
     A --> C
     B --> C
@@ -172,263 +113,215 @@ graph LR
     classDef video fill:#2b1d4d,stroke:#7c5cff,color:#fff;
 ```
 
-### Layer 0 — references (one-time setup)
+### Tầng 0 — ảnh tham chiếu (thiết lập một lần)
 
 <table>
 <tr>
 <td align="center" width="50%">
-  <img src="docs/assets/visual-asset-tshirt.webp" alt="Visual asset — t-shirt" width="320" /><br/>
-  <sub><b>#op4v · Visual asset</b><br/>Cropped boxy short-sleeve tee in cream ribbed cotton with brown "The Famous" centre-chest embroidery.</sub>
+  <img src="docs/assets/visual-asset-tshirt.webp" alt="Sản phẩm — áo thun" width="320" /><br/>
+  <sub><b>#op4v · Sản phẩm</b><br/>Áo thun cổ tròn tay ngắn, màu kem, chất liệu cotton gân, thêu chữ "The Famous" màu nâu ở giữa ngực.</sub>
 </td>
 <td align="center" width="50%">
-  <img src="docs/assets/character-model.jpg" alt="Character — Korean female model" width="320" /><br/>
-  <sub><b>#0p1u · Character</b><br/>Studio portrait headshot, neutral closed-mouth expression — generated from gender + nationality presets, anchored for downstream identity consistency.</sub>
+  <img src="docs/assets/character-model.jpg" alt="Nhân vật — người mẫu nữ Hàn Quốc" width="320" /><br/>
+  <sub><b>#0p1u · Nhân vật</b><br/>Ảnh chụp chân dung trong studio, biểu cảm trung tính, miệng khép — được tạo từ các mẫu giới tính + quốc tịch, dùng làm "neo" để giữ nhất quán danh tính cho mọi ảnh/video phía sau.</sub>
 </td>
 </tr>
 </table>
 
-### Layer 1 — composed studio shot
+### Tầng 1 — ảnh ghép trong studio
 
 <p align="center">
-  <img src="docs/assets/composition-base.jpg" alt="Image #qowj — composition" width="640" /><br/>
-  <sub><b>#qowj · Image</b> — auto-prompt from upstream briefs: "Editorial photo, model engaging the camera with direct eye contact, both hands tucked in pockets, knees-up framing, neutral studio backdrop." 4 pose-distinct variants generated in one batch.</sub>
+  <img src="docs/assets/composition-base.jpg" alt="Ảnh #qowj — ảnh ghép" width="640" /><br/>
+  <sub><b>#qowj · Ảnh</b> — prompt tự soạn từ các mô tả phía trên: "Ảnh tạp chí, người mẫu nhìn thẳng vào ống kính, cả hai tay đút túi quần, khung hình từ đầu gối trở lên, nền studio trung tính." Tạo 4 biến thể tư thế khác nhau trong cùng một lượt.</sub>
 </p>
 
-### Layer 2 — environment-aware variants
+### Tầng 2 — biến thể theo bối cảnh
 
-The synth detects scene context from each new image's brief and switches
-motion vocabulary (street / studio / café / outdoor). Same character + same
-product, three different worlds:
+Hệ thống tự nhận diện bối cảnh từ mô tả của mỗi ảnh mới và chuyển đổi "từ vựng chuyển động" tương ứng (đường phố / studio / quán cà phê / ngoài trời). Cùng một nhân vật, cùng một sản phẩm, nhưng ở ba thế giới khác nhau:
 
 <table>
 <tr>
 <td align="center" width="33%">
-  <img src="docs/assets/composition-autumn.jpg" alt="Autumn variant" width="280" /><br/>
-  <sub><b>#nkov</b> · autumn mountain road, traditional Korean pavilion, red maple foliage</sub>
+  <img src="docs/assets/composition-autumn.jpg" alt="Biến thể mùa thu" width="280" /><br/>
+  <sub><b>#nkov</b> · con đường núi mùa thu, đình truyền thống Hàn Quốc, lá phong đỏ</sub>
 </td>
 <td align="center" width="33%">
-  <img src="docs/assets/composition-seoul-street.jpg" alt="Seoul street" width="280" /><br/>
-  <sub><b>#l7qd</b> · Seoul street, food stalls, Korean signage</sub>
+  <img src="docs/assets/composition-seoul-street.jpg" alt="Đường phố Seoul" width="280" /><br/>
+  <sub><b>#l7qd</b> · đường phố Seoul, xe đẩy thức ăn, biển hiệu Hàn Quốc</sub>
 </td>
 <td align="center" width="33%">
-  <img src="docs/assets/composition-myeongdong.jpg" alt="Myeongdong dusk" width="280" /><br/>
-  <sub><b>#xky5</b> · Myeongdong dusk, red-canopied stalls, Olive Young signage</sub>
+  <img src="docs/assets/composition-myeongdong.jpg" alt="Hoàng hôn Myeongdong" width="280" /><br/>
+  <sub><b>#xky5</b> · hoàng hôn ở Myeongdong, quán có mái che đỏ, biển hiệu Olive Young</sub>
 </td>
 </tr>
 </table>
 
-### Layer 3 — image-to-video (Veo 3.1 i2v)
+### Tầng 3 — tạo video từ ảnh (Veo 3.1 i2v)
 
-Camera is locked-off (e-commerce default — keeps the product fully framed
-the whole clip); the model performs a **time-coded 2–3 beat editorial
-pose-shift** within the 8 seconds. (GitHub renders MP4 inline only when
-hosted on its CDN, so we ship looping GIFs in the README — full-quality
-MP4s live in [`docs/assets/`](docs/assets/).)
+Máy quay được giữ cố định (đây là mặc định cho thương mại điện tử — đảm bảo sản phẩm luôn nằm trọn trong khung hình); người mẫu sẽ thực hiện một chuỗi **2–3 động tác tạp chí** trong vòng 8 giây. (GitHub chỉ hiển thị MP4 khi file nằm trên CDN của họ, nên trong README mình dùng GIF lặp — bản MP4 chất lượng cao nằm trong [`docs/assets/`](docs/assets/).)
 
 <table>
 <tr>
 <td align="center" width="33%">
-  <img src="docs/assets/video-base.gif" alt="Studio motion video" width="280" /><br/>
-  <sub><b>#sncj</b> · studio motion · half-step → glance → hair-tuck<br/><a href="docs/assets/video-base.mp4">▶ MP4</a></sub>
+  <img src="docs/assets/video-base.gif" alt="Video chuyển động trong studio" width="280" /><br/>
+  <sub><b>#sncj</b> · chuyển động trong studio · bước nhẹ → liếc → vuốt tóc<br/><a href="docs/assets/video-base.mp4">▶ MP4</a></sub>
 </td>
 <td align="center" width="33%">
-  <img src="docs/assets/video-autumn.gif" alt="Autumn motion video" width="280" /><br/>
-  <sub><b>#bwr4</b> · autumn road · pivot → pocket → camera smirk<br/><a href="docs/assets/video-autumn.mp4">▶ MP4</a></sub>
+  <img src="docs/assets/video-autumn.gif" alt="Video chuyển động mùa thu" width="280" /><br/>
+  <sub><b>#bwr4</b> · đường mùa thu · xoay người → tay vào túi → cười nhẹ với máy quay<br/><a href="docs/assets/video-autumn.mp4">▶ MP4</a></sub>
 </td>
 <td align="center" width="33%">
-  <img src="docs/assets/video-seoul.gif" alt="Seoul motion video" width="280" /><br/>
-  <sub><b>#uv1p</b> · Seoul daylight · half-step → over-shoulder glance → hand in pocket<br/><a href="docs/assets/video-seoul.mp4">▶ MP4</a></sub>
+  <img src="docs/assets/video-seoul.gif" alt="Video chuyển động Seoul" width="280" /><br/>
+  <sub><b>#uv1p</b> · ánh sáng ban ngày Seoul · bước nhẹ → ngoái nhìn qua vai → tay vào túi<br/><a href="docs/assets/video-seoul.mp4">▶ MP4</a></sub>
 </td>
 </tr>
 </table>
 
-> All three videos were synthesised from a single click each: the
-> auto-prompt reads the upstream image's `aiBrief`, picks scene-matched
-> motion vocab, and locks the camera to keep the cropped tee in frame for
-> the full clip.
+> Cả ba video đều được tạo chỉ với một cú bấm: hệ thống đọc `aiBrief` của ảnh gốc, chọn bộ động tác phù hợp với bối cảnh, và khóa máy quay để áo thun vẫn nằm trọn trong khung hình xuyên suốt clip.
 
 ---
 
-## How it works
+## Flowboard hoạt động thế nào
 
-The mental model — read this once and the rest of the UI is obvious.
+Hãy đọc phần này một lần, phần còn lại của giao diện sẽ rất dễ hiểu.
 
-### 1. Refs are nodes you set up once
+### 1. Ảnh tham chiếu là các ô bạn thiết lập một lần
 
-Two node types act as **anchors** for the rest of the graph:
+Có hai loại ô đóng vai trò **neo** cho toàn bộ sơ đồ:
 
-| Node | Purpose | How to populate |
+| Ô | Mục đích | Cách tạo |
 |------|---------|-----------------|
-| **Character** | A person whose identity you want to keep stable across many shots. | Generate from gender + nationality presets (Nam / Nữ × VN / JP / KR / CN / TH / US / FR), or upload your own portrait. The synth hard-anchors it to a frontal, closed-mouth, neutral-expression studio headshot — Veo i2v can't keep identity stable from a smiling-with-teeth source. |
-| **Visual asset** | A product / garment / object that needs to appear in scenes. | Upload (file or URL) or generate from a prompt. Inline `Refine` button uses Flow's `edit_image` to iterate without losing the original. |
+| **Nhân vật** | Một người mà bạn muốn giữ nguyên danh tính xuyên suốt nhiều ảnh. | Tạo từ các mẫu giới tính + quốc tịch (Nam / Nữ × VN / JP / KR / CN / TH / US / FR), hoặc tải ảnh chân dung của bạn lên. Hệ thống sẽ tự động neo về ảnh chụp thẳng, miệng khép, biểu cảm trung tính — vì Veo i2v không giữ được danh tính ổn định nếu ảnh gốc cười hở răng. |
+| **Sản phẩm** | Sản phẩm / trang phục / đồ vật cần xuất hiện trong các bối cảnh. | Tải lên (từ máy hoặc từ URL) hoặc tạo bằng prompt. Có nút `Refine` ngay trong ô để chỉnh sửa bằng Flow `edit_image` mà không làm mất ảnh gốc. |
 
-Each ref node gets an `aiBrief` automatically (the configured Vision
-provider describes the image once, persists the description on the
-node). Downstream auto-prompt walks upstream and pulls these briefs as
-context. Toggle off in `Settings → AI Providers` if you'd rather
-synthesise from typed prompts.
+Mỗi ô tham chiếu sẽ tự động có một `aiBrief` (LLM có cấu hình vision sẽ mô tả ảnh một lần, lưu mô tả lại trên ô). Khi tạo ảnh/video phía sau, hệ thống sẽ tự đi ngược lên trên, lấy hết các mô tả này làm ngữ cảnh. Bạn có thể tắt trong `Settings → AI Providers` nếu muốn tự gõ prompt.
 
-### 2. Composition is just connecting nodes
+### 2. Ghép ảnh chỉ đơn giản là nối các ô
 
-To build a composed image, drop an **Image** node and wire upstream refs
-into it. Click `Generate` (or just press Enter with the prompt empty):
+Để tạo một ảnh ghép, bạn thả một ô **Ảnh** vào sơ đồ rồi nối các ô tham chiếu phía trên vào nó. Bấm `Generate` (hoặc nhấn Enter khi để trống ô prompt):
 
 ```
-[Character #ujr1]  ───►
+[Nhân vật #ujr1]  ───►
                         \
-[Visual asset #sqpi] ───► [Image #target]
+[Sản phẩm #sqpi]  ───► [Ảnh #đích]
                         /
-[Image #other-ref] ───►
+[Ảnh #khác]       ───►
 ```
 
-All upstream `mediaId`s are fed to Flow as `IMAGE_INPUT_TYPE_REFERENCE`
-inputs. The auto-prompt synth (`/api/prompt/auto-batch`) asks the
-configured LLM to compose **N pose-distinct prompts** in a single
-call when you ask for multiple variants — so 4 variants don't all
-collapse to the same "hand-on-hip" stance. The prompt template is fashion-editorial style:
-direct gaze, neutral closed-mouth, three-quarter angle, hand gesturing
-toward the garment, knees-up framing.
+Mọi `mediaId` phía trên sẽ được gửi cho Flow dưới dạng đầu vào kiểu `IMAGE_INPUT_TYPE_REFERENCE`. Khi bạn yêu cầu nhiều biến thể, hệ thống tự soạn prompt (`/api/prompt/auto-batch`) sẽ nhờ LLM tạo **N câu prompt khác tư thế** trong cùng một lần gọi — nên 4 biến thể sẽ không bị trùng vào một kiểu "tay chống hông". Prompt mặc định theo phong cách tạp chí thời trang: nhìn thẳng, miệng khép trung tính, góc ba phần tư, tay hướng về trang phục, khung hình từ đầu gối trở lên.
 
-### 3. Image → Video via Veo i2v
+### 3. Từ Ảnh sang Video bằng Veo i2v
 
-A **Video** node takes a single upstream Image. Connect it, click
-`Generate`, pick:
+Một ô **Video** nhận đầu vào là một ô Ảnh phía trên. Nối xong, bấm `Generate`, chọn:
 
-- **Camera** = `Static` (default, e-commerce-safe — locked-off frame, no
-  zoom or pan, product never crops out) or `Dynamic` (synth picks
-  subtle dolly / pan based on scene).
-- **Source variants** = checkbox per upstream variant + `All / None`
-  bulk action. If the upstream image has 4 variants and you tick all 4,
-  the dispatcher batches **one i2v op per variant** in a single Flow
-  call — 4 source stills → 4 distinct videos.
+- **Camera** = `Tĩnh` (mặc định, an toàn cho thương mại điện tử — khung hình khóa cứng, không zoom, không lia, sản phẩm không bao giờ bị cắt) hoặc `Động` (hệ thống tự chọn dolly / lia / micro-shift phù hợp với bối cảnh).
+- **Biến thể nguồn** = tích từng biến thể phía trên + có nút `Tất cả / Bỏ chọn` để thao tác nhanh. Nếu ảnh phía trên có 4 biến thể và bạn tích cả 4, hệ thống sẽ gửi **một yêu cầu i2v cho mỗi biến thể** trong cùng một lần gọi Flow — 4 ảnh gốc → 4 video khác nhau.
 
-The motion synth uses time-coded beats (`0–3s: …`, `3–6s: …`, `6–8s: …`)
-so the model performs an editorial pose-shift sequence inside the 8 s
-clip — never a frozen statue, never an open-mouth smile.
+Phần tạo chuyển động dùng các mốc thời gian (`0–3s: …`, `3–6s: …`, `6–8s: …`) để mô hình thực hiện một chuỗi động tác tạp chí trong clip 8 giây — không bao giờ đứng hình, không bao giờ cười hở miệng.
 
-### 4. Auto-prompt is environment-aware
+### 4. Prompt tự soạn nhận biết bối cảnh
 
-The synth reads the source still's `aiBrief` and switches motion
-vocabulary based on detected scene:
+Hệ thống đọc `aiBrief` của ảnh nguồn và chuyển đổi "từ vựng chuyển động" tùy theo bối cảnh:
 
-| Scene type | Motion vocab |
+| Loại bối cảnh | Từ vựng chuyển động |
 |------------|-------------|
-| Studio / plain backdrop | hand-on-hip, brush sleeve, head tilt, engage camera |
-| Street / city / sidewalk | half-step forward, hair tuck, glance over shoulder, hand in pocket, smirk |
-| Café / interior | sip from cup, lean back, glance toward window |
-| Beach / nature / outdoor | hair flutter in breeze, slow exhale, look toward horizon |
+| Studio / nền trơn | tay chống hông, vuốt tay áo, nghiêng đầu, nhìn vào ống kính |
+| Đường phố / thành phố / vỉa hè | bước nhẹ về phía trước, vuốt tóc, ngoái nhìn qua vai, tay vào túi, cười nhẹ |
+| Quán cà phê / trong nhà | nhấp một ngụm, ngả người ra sau, liếc nhìn ra cửa sổ |
+| Bãi biển / thiên nhiên / ngoài trời | tóc bay trong gió, thở nhẹ, nhìn về phía đường chân trời |
 
-A studio shot gets editorial poses; a NYC-street shot gets walk-and-glance
-motion. No code branches — the LLM detects the keyword and picks the
-matching vocab from the system prompt.
+Ảnh chụp studio thì được tạo động tác tạp chí, ảnh chụp đường phố New York thì được tạo động tác đi bộ và liếc nhìn. Không cần viết thêm nhánh code nào — LLM nhận diện từ khóa và chọn đúng bộ từ vựng từ prompt hệ thống.
 
 ---
 
-## Architecture
+## Kiến trúc tổng thể
 
 ```
 ┌──────────────────────┐    ┌────────────────────┐    ┌──────────────────────┐
-│  Chrome MV3 ext      │◄───┤  FastAPI agent     ├───►│  SQLite (storage/)   │
+│  Tiện ích Chrome MV3 │◄───┤  Agent FastAPI     ├───►│  SQLite (storage/)   │
 │  - content script    │ WS │  127.0.0.1:8101    │    │  Board, Node, Edge,  │
-│  - injected MAIN     │ ws │  + worker queue    │    │  Request, Asset,     │
-│  - CDN URL allow     │9223│  + WS server :9223 │    │  Plan, ChatMessage,  │
-│  - Captcha bridge    │    │  + LLM CLI bridge  │    │  BoardFlowProject    │
+│  - injected MAIN     │ ws │  + hàng đợi worker │    │  Request, Asset,     │
+│  - cho phép CDN URL  │9223│  + WS server :9223 │    │  Plan, ChatMessage,  │
+│  - cầu nối Captcha   │    │  + cầu nối LLM CLI │    │  BoardFlowProject    │
 └──────────────────────┘    └─────────┬──────────┘    └──────────────────────┘
         ▲                             │
         │                             ▼
         │                   ┌────────────────────┐
         └───── Google Flow  │  React + Vite      │
-              labs.google   │  ReactFlow canvas  │
-              (i2v / image) │  Zustand store     │
+              labs.google   │  Canvas ReactFlow  │
+              (i2v / ảnh)   │  Store Zustand     │
                             │  127.0.0.1:5173    │
                             └────────────────────┘
 ```
 
-- **Frontend** — Vite + React 18 + ReactFlow 12 + Zustand 5 + TypeScript
-  strict. Renders the infinite canvas, dialogs, sidebars. No direct
-  calls to Google Flow.
-- **Agent** — FastAPI + SQLModel + SQLite. Owns the board state, runs
-  an in-process worker queue that proxies all generation requests
-  through the extension, and shells out to the configured LLM CLI
-  (Claude / Gemini / Codex — see *AI Providers* below) for vision +
-  auto-prompt + planner synthesis.
-- **Extension** — Chrome MV3. Lives on `labs.google/fx/tools/flow`,
-  intercepts Flow's API calls (multimodal-fetch in MAIN world for the
-  reCAPTCHA token), proxies them over a localhost WebSocket so the
-  agent never has to touch the browser cookie jar directly.
-- **Storage** — local-only. SQLite for graph + history, a
-  `storage/media/` folder for cached image / video bytes (lazy-fetched
-  from Flow's signed CDN URLs and re-served from the agent so they
-  outlive the 1-hour signed URL TTL).
+- **Giao diện web** — Vite + React 18 + ReactFlow 12 + Zustand 5 + TypeScript ở chế độ nghiêm ngặt. Vẽ bảng vẽ vô hạn, các hộp thoại, thanh bên. Không gọi thẳng đến Google Flow.
+- **Agent** — FastAPI + SQLModel + SQLite. Quản lý trạng thái bảng vẽ, chạy một hàng đợi worker trong cùng tiến trình để chuyển tiếp mọi yêu cầu tạo ảnh/video qua tiện ích Chrome, và gọi LLM CLI bạn đã cấu hình (Claude / Gemini / Codex — xem *AI Providers* bên dưới) để xem ảnh + tự soạn prompt + lập kế hoạch.
+- **Tiện ích Chrome** — Chrome MV3. Chạy trên trang `labs.google/fx/tools/flow`, chặn các lệnh gọi API của Flow (chạy ở "MAIN world" để lấy mã reCAPTCHA), chuyển tiếp qua WebSocket loopback để agent không cần đụng đến cookie trình duyệt.
+- **Lưu trữ** — chỉ trên máy bạn. SQLite cho sơ đồ + lịch sử, thư mục `storage/media/` để cache ảnh/video (tải lười từ các URL có chữ ký của Flow và phát lại từ agent để không bị hết hạn sau 1 giờ).
 
 ---
 
-## Quickstart
+## Hướng dẫn cài đặt nhanh
 
-### Requirements
+### Yêu cầu
 
-| Dependency | Why |
+| Phần mềm cần có | Lý do |
 |------------|-----|
-| **Python 3.11** | Agent runtime (FastAPI + SQLModel) |
-| **Node 20+** | Frontend dev server (Vite) |
-| **Chrome / Chromium** | **Mandatory** — hosts the MV3 extension that proxies every Google Flow API call. The agent has zero direct path to Flow without it. |
-| **One LLM CLI** on `PATH` | Vision describe + auto-prompt + planner. Pick one — defaults to **Claude Code** ([`@anthropic-ai/claude-code`](https://docs.claude.com/claude-code/install)); also supports **Gemini CLI** ([`@google/gemini-cli`](https://github.com/google-gemini/gemini-cli)) and **OpenAI Codex** ([`@openai/codex`](https://github.com/openai/codex), provider implemented but not yet smoke-tested). All use OAuth against your existing AI subscription — no API key needed. |
-| **Google Flow `Pro` or `Ultra` plan** at [`labs.google/fx/tools/flow`](https://labs.google/fx/tools/flow) | **Free tier and trial accounts will not work.** Veo 3.1 i2v + GEM_PIX_2 image gen are gated to paid plans. |
+| **Python 3.11** | Môi trường chạy agent (FastAPI + SQLModel) |
+| **Node 20 trở lên** | Máy chủ phát triển giao diện web (Vite) |
+| **Chrome / Chromium** | **Bắt buộc** — chứa tiện ích MV3 để chuyển tiếp mọi lệnh gọi Google Flow. Agent không có cách nào nói chuyện với Flow nếu không có tiện ích. |
+| **Một CLI LLM** trong `PATH` | Để mô tả ảnh + tự soạn prompt + lập kế hoạch. Chọn một — mặc định là **Claude Code** ([`@anthropic-ai/claude-code`](https://docs.claude.com/claude-code/install)); cũng hỗ trợ **Gemini CLI** ([`@google/gemini-cli`](https://github.com/google-gemini/gemini-cli)) và **OpenAI Codex** ([`@openai/codex`](https://github.com/openai/codex), đã viết mã nhưng chưa chạy thử). Tất cả đều đăng nhập bằng gói AI bạn đang trả — không cần thêm khóa API. |
+| **Gói Google Flow `Pro` hoặc `Ultra`** tại [`labs.google/fx/tools/flow`](https://labs.google/fx/tools/flow) | **Gói miễn phí và tài khoản dùng thử sẽ không chạy được.** Tính năng tạo video Veo 3.1 i2v + tạo ảnh GEM_PIX_2 chỉ mở cho gói trả phí. |
 
-> **Windows:** Use [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). All commands assume a Unix shell.
+> **Trên Windows:** Dùng [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). Mọi lệnh bên dưới giả định bạn đang dùng shell Unix.
 
-### One-line setup (optional)
+### Cài đặt nhanh bằng một dòng (tùy chọn)
 
-If you have `make` installed, the repo ships shortcut targets that wrap
-Steps 2 + 3:
+Nếu bạn đã cài `make`, repo có sẵn các lệnh tắt gom Bước 2 + 3:
 
 ```bash
-make install        # agent venv + frontend deps (uses uv if available, else pip)
-make install-dev    # same, but adds ruff + pytest extras
-make update         # upgrade agent + frontend deps in place
-make agent          # run FastAPI on :8101
-make frontend       # run Vite on :5173
+make install        # cài venv cho agent + gói cho frontend (ưu tiên uv, không có thì dùng pip)
+make install-dev    # giống trên, kèm thêm ruff + pytest
+make update         # nâng cấp gói của agent + frontend tại chỗ
+make agent          # chạy FastAPI ở cổng :8101
+make frontend       # chạy Vite ở cổng :5173
 ```
 
-`uv` is auto-detected (~10× faster installs). Install it once with
-`curl -LsSf https://astral.sh/uv/install.sh | sh`, or skip it and the
-Makefile falls back to stdlib `venv` + `pip`. Step 1 (loading the Chrome
-extension) still has to be done manually.
+`uv` sẽ được tự phát hiện (cài nhanh hơn ~10 lần). Cài một lần bằng `curl -LsSf https://astral.sh/uv/install.sh | sh`, hoặc bỏ qua thì Makefile sẽ tự dùng `venv` + `pip` chuẩn. Riêng Bước 1 (cài tiện ích Chrome) vẫn phải làm thủ công.
 
-### Step 1 — load the Chrome extension
+### Bước 1 — cài tiện ích Chrome
 
 ```bash
 git clone https://github.com/<your-fork>/flowboard.git
 cd flowboard
 ```
 
-1. Open `chrome://extensions/` → enable **Developer mode** (top-right).
-2. Click **Load unpacked** → pick the `extension/` folder in this repo.
-3. Open a tab to <https://labs.google/fx/tools/flow> and sign in.
-4. The extension's icon should turn coloured once it captures a fresh
-   Flow auth token (~5 s).
+1. Mở `chrome://extensions/` → bật **Chế độ nhà phát triển** (góc trên bên phải).
+2. Bấm **Tải tiện ích đã giải nén** → chọn thư mục `extension/` trong repo này.
+3. Mở một tab đến <https://labs.google/fx/tools/flow> và đăng nhập.
+4. Biểu tượng tiện ích sẽ chuyển sang màu khi nó lấy được mã đăng nhập Flow mới (khoảng 5 giây).
 
-### Step 2 — start the agent
+### Bước 2 — khởi động agent
 
 ```bash
 cd agent
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# `--timeout-graceful-shutdown 2` keeps `--reload` snappy when you save
-# a Python file — without it, uvicorn waits forever for the WS to drain.
+# `--timeout-graceful-shutdown 2` giúp `--reload` phản hồi nhanh khi bạn lưu file Python
+# — nếu thiếu, uvicorn sẽ chờ mãi WebSocket đóng.
 .venv/bin/uvicorn flowboard.main:app --reload --port 8101 \
   --timeout-graceful-shutdown 2
 ```
 
-Smoke-test:
+Kiểm tra nhanh:
 
 ```bash
 curl http://127.0.0.1:8101/api/health
 # {"ok":true,"extension_connected":true,"ws_stats":{"connected":true,"flow_key_present":true,...}}
 ```
 
-### Step 3 — start the frontend
+### Bước 3 — khởi động giao diện web
 
 ```bash
 cd frontend
@@ -437,12 +330,9 @@ npm run dev
 # → http://localhost:5173
 ```
 
-Open the URL. The first board ("Untitled") auto-creates if the DB is
-empty. Add a Character node, generate it, drop a Visual asset, drop an
-Image, wire them up, click **▶ Generate** — the full demo above is
-about 15 minutes of clicking.
+Mở đường dẫn trên. Bảng vẽ đầu tiên ("Chưa đặt tên") sẽ tự tạo nếu cơ sở dữ liệu còn trống. Thêm ô Nhân vật, tạo ảnh, thêm ô Sản phẩm, thêm ô Ảnh, nối các ô lại, bấm **▶ Generate** — toàn bộ demo ở trên chỉ mất khoảng 15 phút thao tác.
 
-### Run tests
+### Chạy bộ kiểm thử
 
 ```bash
 # Agent
@@ -455,211 +345,132 @@ cd frontend && npx tsc -p . --noEmit && npx vite build
 
 ---
 
-## Features
+## Các tính năng chính
 
-### Ref-style nodes
+### Các ô kiểu tham chiếu
 
-- **Character** — generate via gender + nationality preset chips, or
-  upload your own headshot. Hard-anchored to a frontal, closed-mouth,
-  neutral-expression portrait so Veo i2v keeps identity stable across
-  every downstream clip.
-- **Visual asset** — upload (file / URL) or generate. Refine in-place
-  with a different prompt (Flow `edit_image`, BASE_IMAGE preserved,
-  optional reference list).
+- **Nhân vật** — tạo từ các nút mẫu giới tính + quốc tịch, hoặc tải ảnh chân dung của bạn lên. Luôn được neo về ảnh chụp thẳng, miệng khép, biểu cảm trung tính để Veo i2v giữ nhất quán danh tính xuyên suốt mọi clip phía sau.
+- **Sản phẩm** — tải lên (từ máy hoặc URL) hoặc tạo bằng prompt. Có thể chỉnh sửa tại chỗ bằng một prompt khác (Flow `edit_image`, giữ nguyên `BASE_IMAGE`, có thể kèm danh sách tham chiếu).
 
-### Composition nodes
+### Các ô ghép nội dung
 
-- **Image** — multi-ref aware. Connect any number of upstream
-  characters, visual assets, or other images; all of them flow in as
-  Flow's `IMAGE_INPUT_TYPE_REFERENCE` inputs.
-  - 1–4 variants per gen, each with its own pose-distinct prompt
-    (the LLM rotates through an 8-stance pool per variant — never two
-    "hand-on-hip" variants in the same gen).
-  - Default aspect ratio inherits from upstream node; mismatched
-    upstream aspects fall back to 9:16.
-- **Storyboard** — sequenced 1–8 narrative shots in one node. The
-  planner LLM emits per-beat prompts AND a continuity tree: each beat
-  declares whether it's a fresh root (`gen_image`) or continues from
-  an earlier beat (`edit_image` from that beat's mediaId). Roots
-  dispatch in parallel batches of 4; continuations BFS through the
-  tree, siblings parallel. Refs from upstream edges apply to every
-  shot. Failed shots stay `partial` and can be retried per-tile —
-  blocked descendants surface a 🔒 until their parent is retried.
-  Useful for unbox → try-on → going-out arcs, scene chains, and
-  e-commerce shot lists.
-- **Video** — image-to-video via Veo. **Multi-source i2v**: a 4-variant
-  upstream image dispatches a single batch with one item per variant →
-  one video per source. Or pick a subset (toggleable thumbnails +
-  All / None bulk action).
-  - Camera = `Static` (locked-off, e-commerce default) or `Dynamic`
-    (synth picks dolly / pan / micro-shift to fit the scene).
-  - Motion synth uses time-coded beats so the model performs an
-    editorial 2–3 pose-shift sequence inside the 8s clip — never a
-    frozen statue.
+- **Ảnh** — nhận nhiều ảnh tham chiếu. Nối bao nhiêu nhân vật, sản phẩm hoặc ảnh khác cũng được; tất cả sẽ được gửi cho Flow dưới dạng `IMAGE_INPUT_TYPE_REFERENCE`.
+  - 1–4 biến thể mỗi lần tạo, mỗi biến thể có một prompt tư thế khác nhau (LLM xoay vòng qua bộ 8 tư thế cho mỗi biến thể — không bao giờ có hai biến thể "tay chống hông" trong cùng một lần tạo).
+  - Tỉ lệ ảnh mặc định kế thừa từ ô phía trên; nếu các ô phía trên có tỉ lệ khác nhau thì rơi về 9:16.
+- **Storyboard** — chuỗi 1–8 cảnh kể chuyện trong cùng một ô. LLM lập kế hoạch sẽ sinh prompt cho từng cảnh VÀ một cây liên tục: mỗi cảnh sẽ tự khai báo là bắt đầu mới (`gen_image`) hay nối tiếp cảnh trước (`edit_image` từ `mediaId` của cảnh đó). Các cảnh bắt đầu chạy song song theo lô 4; các cảnh nối tiếp đi theo cây, các cảnh cùng cấp chạy song song. Tham chiếu từ các ô phía trên áp dụng cho mọi cảnh. Cảnh bị lỗi giữ trạng thái `partial` và có thể thử lại từng ô; các cảnh phụ thuộc sẽ hiện biểu tượng 🔒 cho đến khi cảnh cha thử lại thành công. Phù hợp với chuỗi "mở hộp → thử đồ → đi chơi", chuỗi bối cảnh, danh sách cảnh quay thương mại điện tử.
+- **Video** — tạo video từ ảnh bằng Veo. **i2v đa nguồn**: một ảnh phía trên có 4 biến thể sẽ tạo ra một đợt gồm một video cho mỗi biến thể → một video cho mỗi nguồn. Hoặc chọn một tập con (tích/bỏ tích từng biến thể + có nút `Tất cả / Bỏ chọn`).
+  - Camera = `Tĩnh` (khung hình khóa, mặc định cho thương mại điện tử) hoặc `Động` (hệ thống tự chọn dolly / lia / micro-shift phù hợp với bối cảnh).
+  - Phần tạo chuyển động dùng các mốc thời gian để mô hình thực hiện chuỗi 2–3 động tác tạp chí trong clip 8 giây — không bao giờ đứng hình.
 
-### Auto-prompt synthesis
+### Tự soạn prompt
 
-- Vision describes each new asset (configured CLI's multimodal
-  attachment path — `@<path>` for Claude / Gemini, `--image` for Codex
-  when available) → saved as `aiBrief` on the node.
-- Downstream gen with empty prompt → `/api/prompt/auto` walks upstream
-  edges, gathers briefs, asks the configured LLM to compose a prompt
-  that matches the scene + showcases the product.
-- For multi-variant gens, `/api/prompt/auto-batch` returns N
-  pose-distinct prompts in a single LLM call.
-- **Vision toggle** in `Settings → AI Providers`: when OFF, the
-  synthesiser falls back to each upstream node's typed `prompt`
-  instead of a vision-derived brief. Manual upload paths still run
-  vision automatically (the user explicitly added bytes) — only the
-  gen-completion auto-brief is gated.
+- Vision sẽ mô tả mỗi tài sản mới (dùng đường dẫn đính kèm đa phương thức của CLI đã cấu hình — `@<path>` cho Claude / Gemini, `--image` cho Codex khi có) → lưu thành `aiBrief` trên ô.
+- Khi tạo ảnh/video phía dưới mà để trống prompt → `/api/prompt/auto` đi ngược lên các cạnh phía trên, thu thập các mô tả, nhờ LLM soạn một prompt phù hợp với bối cảnh và làm nổi sản phẩm.
+- Khi tạo nhiều biến thể, `/api/prompt/auto-batch` trả về N prompt tư thế khác nhau trong cùng một lần gọi LLM.
+- **Bật/tắt Vision** trong `Settings → AI Providers`: khi TẮT, hệ thống tự soạn sẽ dùng prompt bạn gõ tay trên từng ô tham chiếu thay vì dùng mô tả do vision tạo. Đường dẫn tải lên thủ công vẫn tự chạy vision (vì bạn đã cố ý thêm ảnh) — chỉ phần tự điền prompt khi tạo mới là bị ảnh hưởng.
 
-### AI Providers (multi-LLM)
+### Nhiều nhà cung cấp AI (multi-LLM)
 
-A **🤖 Provider** chip in the top-right toolbar opens a dialog where
-you switch which LLM powers Flowboard. One provider serves all three
-features (Auto-Prompt / Vision / Planner) — switching is one decision,
-not three. Per-feature test buttons run a small ping per feature and
-gate the **Apply changes** button until all three pass green, so you
-never apply a switch that's silently broken.
+Một nhãn **🤖 Provider** ở góc trên bên phải thanh công cụ sẽ mở hộp thoại để bạn đổi LLM nào đang điều khiển Flowboard. Một nhà cung cấp phụ trách cả ba tính năng (Tự soạn prompt / Vision / Lập kế hoạch) — đổi một lần, không phải ba. Có nút kiểm thử cho từng tính năng và nút **Apply changes** chỉ sáng khi cả ba kiểm thử đều xanh, để bạn không lỡ đổi sang một lựa chọn đang lỗi im lặng.
 
-| Provider | Auth | Status |
+| Nhà cung cấp | Cách đăng nhập | Trạng thái |
 |---|---|---|
-| **Claude Code** | OAuth via `claude` CLI · Anthropic browser sign-in | ✅ Default · production-tested |
-| **Gemini CLI** | OAuth via `gemini` CLI · Google AI Ultra plan | ✅ Tested · ~15 s slower than Claude |
-| **OpenAI Codex** | OAuth via `codex` CLI · ChatGPT Plus/Pro | ⚠ Provider implemented but not yet smoke-tested |
+| **Claude Code** | OAuth qua CLI `claude` · đăng nhập trên trang Anthropic | ✅ Mặc định · đã chạy thử kỹ |
+| **Gemini CLI** | OAuth qua CLI `gemini` · gói Google AI Ultra | ✅ Đã chạy thử · chậm hơn Claude ~15 giây |
+| **OpenAI Codex** | OAuth qua CLI `codex` · ChatGPT Plus/Pro | ⚠ Đã viết mã nhưng chưa chạy thử |
 
-Backend keeps a Grok REST provider class for power users who edit
-`~/.flowboard/secrets.json` directly, but the UI doesn't surface it
-because xAI hasn't shipped an end-user CLI.
+Phía backend có sẵn lớp nhà cung cấp Grok REST cho người dùng thích sửa trực tiếp `~/.flowboard/secrets.json`, nhưng giao diện không hiển thị vì xAI chưa ra mắt CLI cho người dùng cuối.
 
-### Activity feed
+### Nhật ký hoạt động
 
-A **🔔 bell** sits in the toolbar next to the AI Provider chip. Click
-it to see every backend operation in DESC order: gen image / gen
-video / edit image / auto-prompt / vision / planner — each with its
-status pill (✓ done · ⟳ running · ✗ failed) and how long it ran. Click
-a row to open a detail modal with the full input params, output
-result, and error JSON (with copy buttons), so you can diagnose a
-failed gen without tailing agent logs.
+Một biểu tượng **🔔 chuông** nằm trên thanh công cụ cạnh nhãn AI Provider. Bấm vào để xem mọi thao tác backend theo thứ tự thời gian mới nhất: tạo ảnh / tạo video / sửa ảnh / tự soạn prompt / vision / lập kế hoạch — mỗi mục có nhãn trạng thái (✓ xong · ⟳ đang chạy · ✗ lỗi) và thời lượng chạy. Bấm vào một dòng để mở cửa sổ chi tiết với đầy đủ tham số đầu vào, kết quả đầu ra, JSON lỗi (có nút sao chép), để bạn chẩn đoán lỗi mà không cần mở log của agent.
 
-The bell badge counts running + recently-failed-unread items, with a
-red tint when any failure is unread. Polling is 5 s while the dropdown
-is open, 30 s while closed, and pauses when the tab is backgrounded.
+Huy hiệu trên chuông đếm số mục đang chạy + số mục lỗi gần đây chưa đọc, có viền đỏ khi có lỗi chưa đọc. Tự động làm mới mỗi 5 giây khi danh sách đang mở, 30 giây khi đóng, và tạm dừng khi tab không được mở.
 
-### Workflow ergonomics
+### Trải nghiệm làm việc
 
-- **Drop-add popover** — drag an edge into empty canvas, popover at the
-  drop point with `Image` / `Video` quick-add → new node + auto-wired
-  edge.
-- **Easy edge editing** — click an edge to select (accent ring + glow),
-  Backspace / Delete to remove. 24 px transparent hit-slop so edges are
-  forgiving to grab.
-- **Clone variant** — `New variant +` in the result viewer creates a
-  sibling node with identical upstream connections, prefills the
-  prompt, opens the gen dialog.
-- **Project sidebar** — multiple boards on the same agent, each with
-  its own Flow project mapping. Rename / delete with cascade (clears
-  all child rows: nodes, edges, requests, assets, plans, runs).
+- **Thêm ô nhanh** — thả từ bảng chọn ô vào vị trí bất kỳ với `Image` / `Video` thêm nhanh → tạo ô mới + tự nối cạnh.
+- **Sửa cạnh dễ dàng** — bấm vào một cạnh để chọn (viền sáng + phát sáng), nhấn Backspace / Delete để xóa. Có vùng bắt chuột trong suốt 24 px để dễ nắm.
+- **Sao chép biến thể** — nút `New variant +` trong trình xem kết quả sẽ tạo một ô anh em với cùng kết nối phía trên, điền sẵn prompt, mở hộp thoại tạo ảnh.
+- **Thanh bên dự án** — nhiều bảng vẽ trong cùng một agent, mỗi bảng có ánh xạ dự án Flow riêng. Đổi tên / xóa có lan truyền (xóa luôn các hàng con: ô, cạnh, yêu cầu, tài sản, kế hoạch, lượt chạy).
 
 ---
 
-## Repo layout
+## Cấu trúc thư mục
 
 ```
-agent/                  FastAPI service (Python 3.11)
+agent/                  Dịch vụ FastAPI (Python 3.11)
   flowboard/
-    routes/             HTTP endpoints (boards, nodes, edges, requests,
+    routes/             Các điểm cuối HTTP (boards, nodes, edges, requests,
                         upload, vision, prompt, plans, llm, activity, …)
-    services/           Flow SDK, prompt synth, vision describe,
-                        pipeline executor, activity logger
-      llm/              Multi-LLM provider layer (registry, secrets,
+    services/           SDK Flow, bộ soạn prompt, mô tả ảnh,
+                        bộ thực thi pipeline, ghi nhật ký hoạt động
+      llm/              Lớp nhiều nhà cung cấp LLM (registry, secrets,
                         Claude / Gemini / OpenAI Codex / Grok)
-      claude_cli.py     Subprocess detail behind ClaudeProvider
-    worker/             In-process queue (gen_image, gen_video,
+      claude_cli.py     Chi tiết tiến trình con của ClaudeProvider
+    worker/             Hàng đợi trong tiến trình (gen_image, gen_video,
                         edit_image, upload_image)
-    db/                 SQLModel definitions
-  tests/                333+ pytest tests
+    db/                 Định nghĩa SQLModel
+  tests/                Hơn 333 bài kiểm thử pytest
 
 frontend/               Vite + React + ReactFlow
   src/
     canvas/             Board.tsx, NodeCard.tsx, AddNodePalette.tsx
     components/
-      activity/         ActivityBell + dropdown + detail modal
-      settings/         AiProvidersSection + ProviderCard + setup modal
+      activity/         ActivityBell + danh sách thả xuống + cửa sổ chi tiết
+      settings/         AiProvidersSection + ProviderCard + cửa sổ cài đặt
       AiProviderBadge.tsx · AiProviderDialog.tsx · GenerationDialog · ResultViewer · ProjectSidebar · ChatSidebar · Toolbar · Toaster
     store/              Zustand: board, generation, pipeline, settings
     api/                client.ts, autoBrief.ts
 
 extension/              Chrome MV3 (content script + injected MAIN)
-docs/                   Static assets (this README, screenshots, demo media)
-storage/                Local cache + SQLite (gitignored)
+docs/                   Tài sản tĩnh (README này, ảnh chụp, media demo)
+storage/                Bộ nhớ đệm cục bộ + SQLite (đã thêm vào .gitignore)
 ```
 
 ---
 
-## Status
+## Trạng thái dự án
 
-Personal local-only tool. **333 / 333 tests passing** (agent), tsc
-clean (frontend). Caveats:
+Công cụ cá nhân, chỉ chạy trên máy. **333 / 333 bài kiểm thử đều pass** (agent), tsc sạch (frontend). Lưu ý:
 
-- ⚠ **Google Flow plan must be `Pro` or `Ultra`.** Free tier and trial
-  accounts have no access to Veo 3.1 i2v / GEM_PIX_2 — every generation
-  call will fail.
-- ⚠ **Chrome extension must be loaded and connected.** The agent does
-  not talk to Flow directly — all i2v / image / edit requests are
-  proxied through `extension/` over a localhost WebSocket. No
-  extension → no generation.
-- ⚠ HMAC-secured WS (`X-Callback-Secret` per agent boot) — single
-  loopback only, not multi-user.
-- ⚠ Google Flow rate limits still apply within your paid tier.
-- ⚠ Veo / Imagen content filters
-  (`PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`,
-  `PUBLIC_ERROR_AUDIO_FILTERED`) — surfaced verbatim in the activity
-  feed + failed-request error so the user can diagnose / iterate.
-- ⚠ Auto-prompt + vision + planner require **one** LLM CLI on `PATH`
-  (Claude Code recommended; Gemini CLI tested; OpenAI Codex provider
-  implemented but not yet smoke-tested). Without any CLI, the
-  `Generate` button still works if you type your own prompt — only
-  the auto-prompt-from-empty path is unavailable.
+- ⚠ **Gói Google Flow bắt buộc là `Pro` hoặc `Ultra`.** Gói miễn phí và tài khoản dùng thử không có quyền truy cập Veo 3.1 i2v / GEM_PIX_2 — mọi lệnh tạo sẽ thất bại.
+- ⚠ **Phải cài và kết nối tiện ích Chrome.** Agent không nói chuyện trực tiếp với Flow — mọi yêu cầu i2v / ảnh / sửa ảnh đều được chuyển tiếp qua `extension/` qua WebSocket loopback. Không có tiện ích → không tạo được.
+- ⚠ WebSocket có bảo vệ HMAC (`X-Callback-Secret` được tạo mỗi lần agent khởi động) — chỉ chạy loopback, không dành cho nhiều người dùng.
+- ⚠ Giới hạn tốc độ của Google Flow vẫn áp dụng trong gói trả phí của bạn.
+- ⚠ Bộ lọc nội dung của Veo / Imagen (`PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED`, `PUBLIC_ERROR_AUDIO_FILTERED`) — hiển thị nguyên văn trong nhật ký hoạt động + lỗi yêu cầu thất bại để bạn tự chẩn đoán / thử lại.
+- ⚠ Tính năng tự soạn prompt + vision + lập kế hoạch cần **một** CLI LLM trong `PATH` (khuyên dùng Claude Code; đã thử với Gemini CLI; OpenAI Codex đã viết mã nhưng chưa chạy thử). Nếu không có CLI nào, nút `Generate` vẫn hoạt động nếu bạn tự gõ prompt — chỉ có đường tự điền khi để trống là không dùng được.
 
-## Related
+## Liên quan
 
-- [`crisng95/flowkit`](https://github.com/crisng95/flowkit) — the same
-  Chrome-extension-bridge approach to Google Flow, but for **YouTube
-  story videos** (multi-scene, narration, thumbnails). Flowboard
-  borrows the bridge architecture.
+- [`crisng95/flowkit`](https://github.com/crisng95/flowkit) — cùng cách dùng tiện ích Chrome làm cầu nối với Google Flow, nhưng dành cho **video truyện YouTube** (nhiều cảnh, lời dẫn, ảnh bìa). Flowboard mượn kiến trúc cầu nối này.
 
-## License
+## Giấy phép
 
-MIT (proposed — license file pending).
+MIT (dự kiến — file giấy phép đang chờ bổ sung).
 
 ---
 
-## Credits
+## Ghi công
 
-Generated media in this README was produced through the pipeline using
-[Google Flow](https://labs.google/flow). Auto-prompt + vision synthesis
-defaults to [Claude](https://claude.ai) via the local CLI; multi-LLM
-support adds Google's [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-and OpenAI's [Codex CLI](https://github.com/openai/codex) as alternative
-providers — pick one in `Settings → AI Providers`.
+Mọi ảnh/video trong README này được tạo ra thông qua quy trình sử dụng [Google Flow](https://labs.google/flow). Phần tự soạn prompt + mô tả ảnh mặc định dùng [Claude](https://claude.ai) qua CLI cục bộ; hỗ trợ nhiều LLM bổ sung thêm [Gemini CLI](https://github.com/google-gemini/gemini-cli) của Google và [Codex CLI](https://github.com/openai/codex) của OpenAI — chọn một trong `Settings → AI Providers`.
 
 ---
 
-## Community & Support
+## Cộng đồng & Hỗ trợ
 
 <p align="center">
   <a href="https://www.facebook.com/groups/flowkit.flowboard.community">
-    <img src="https://img.shields.io/badge/Join%20the%20Community-FlowKit%20%26%20Flowboard%20on%20Facebook-1877F2?style=for-the-badge&logo=facebook&logoColor=white" alt="Join the FlowKit & Flowboard Facebook Group" />
+    <img src="https://img.shields.io/badge/Join%20the%20Community-FlowKit%20%26%20Flowboard%20on%20Facebook-1877F2?style=for-the-badge&logo=facebook&logoColor=white" alt="Tham gia nhóm FlowKit & Flowboard trên Facebook" />
   </a>
 </p>
 
-The shared community for both **FlowKit** and **Flowboard**. Drop in to:
+Cộng đồng chung cho cả **FlowKit** và **Flowboard**. Bạn có thể:
 
-- Post the shots and clips you've generated
-- Share node-graph patterns, vibe presets, and prompt recipes that work for you
-- Ask for help when an output isn't matching what you imagined
-- Request features and report bugs you've hit in the wild
-- Trade tips on Google Flow plan limits, Veo i2v behaviour, and LLM CLI setup (Claude / Gemini / Codex)
+- Đăng các ảnh và clip bạn đã tạo
+- Chia sẻ các mẫu sơ đồ, bộ vibe và công thức prompt hiệu quả với bạn
+- Nhờ giúp khi kết quả chưa đúng ý bạn
+- Đề xuất tính năng và báo lỗi bạn gặp phải
+- Trao đổi mẹo về giới hạn gói Google Flow, hành vi Veo i2v và cách cài đặt LLM CLI (Claude / Gemini / Codex)
 
 → **[facebook.com/groups/flowkit.flowboard.community](https://www.facebook.com/groups/flowkit.flowboard.community)**

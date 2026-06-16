@@ -1279,7 +1279,7 @@ export function GenerationDialog() {
               <button
                 type="button"
                 disabled={variants <= 1}
-                aria-label="Decrease variants"
+                aria-label="Giảm biến thể"
                 onClick={() => setVariants((v) => Math.max(1, v - 1))}
               >
                 −
@@ -1288,7 +1288,7 @@ export function GenerationDialog() {
               <button
                 type="button"
                 disabled={variants >= 4}
-                aria-label="Increase variants"
+                aria-label="Tăng biến thể"
                 onClick={() => setVariants((v) => Math.min(4, v + 1))}
               >
                 +
@@ -1348,7 +1348,7 @@ export function GenerationDialog() {
             disabled={!canGenerate}
             title={
               nodeLLMBusy && !autoBuilding
-                ? "Backend is still composing — try again in a moment"
+                ? "Backend vẫn đang soạn — thử lại sau ít giây"
                 : undefined
             }
           >

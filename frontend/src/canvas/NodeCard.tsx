@@ -9,6 +9,8 @@ import {
   normaliseStoryboardGrid,
   resolveStoryboardLayout,
 } from "../lib/storyboardPrompt";
+import { NodeTooltip } from "./NodeTooltip";
+import { describeNode } from "./nodeDescriptions";
 
 const ICON: Record<string, string> = {
   character: "◎",
@@ -167,7 +169,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           className={`character-avatar${dragOver ? " character-avatar--over" : ""}${uploading ? " character-avatar--uploading" : ""}`}
           onClick={onPick}
           role="button"
-          aria-label="Replace character image"
+          aria-label="Thay ảnh nhân vật"
           tabIndex={0}
         >
           <img
@@ -189,8 +191,8 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
               data,
             });
           }}
-          title="Save this character to the library"
-          aria-label="Save to library"
+          title="Lưu nhân vật vào thư viện"
+          aria-label="Lưu vào thư viện"
         >
           ★ Save
         </button>
@@ -407,8 +409,8 @@ function ImageTile({
             e.stopPropagation();
             onUseAsRef();
           }}
-          title="Use this variant as the reference for a downstream node"
-          aria-label="Use this variant as reference"
+          title="Dùng biến thể này làm tham chiếu cho ô phía sau"
+          aria-label="Dùng biến thể này làm tham chiếu"
         >
           Use →
         </button>
@@ -425,8 +427,8 @@ function ImageTile({
             e.stopPropagation();
             onSaveToLibrary();
           }}
-          title="Save this variant to the library"
-          aria-label="Save to library"
+          title="Lưu biến thể vào thư viện"
+          aria-label="Lưu vào thư viện"
         >
           ★
         </button>
@@ -528,7 +530,7 @@ function VariantPicker({
   onCancel(): void;
 }) {
   return (
-    <div className="variant-picker" role="dialog" aria-label="Pick downstream target">
+    <div className="variant-picker" role="dialog" aria-label="Chọn ô đích phía sau">
       <div className="variant-picker__heading">
         Use variant v{state.variantIdx + 1} for:
       </div>
@@ -1264,7 +1266,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
             type="button"
             className="visual-asset__refine-btn"
             onClick={() => setRefineOpen((o) => !o)}
-            aria-label="Refine image"
+            aria-label="Tinh chỉnh ảnh"
           >
             Refine
           </button>
@@ -1283,8 +1285,8 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
               data,
             });
           }}
-          title="Save this asset to the library"
-          aria-label="Save to library"
+          title="Lưu tài sản vào thư viện"
+          aria-label="Lưu vào thư viện"
         >
           ★ Save
         </button>
@@ -1293,7 +1295,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
         <div className="visual-asset__refine-panel" role="region" aria-label="Refine">
           <textarea
             className="visual-asset__refine-textarea"
-            placeholder="Describe the change…"
+            placeholder="Mô tả thay đổi…"
             rows={2}
             value={refinePrompt}
             onChange={(e) => setRefinePrompt(e.target.value)}
@@ -1533,6 +1535,22 @@ export function NodeCard(props: NodeProps<FlowNode>) {
       <div className="node-header">
         <span className="node-icon" aria-hidden="true">{ICON[data.type] ?? "□"}</span>
         <span className="node-title">{data.title}</span>
+        {/* ⓘ info icon — hover (or focus) for the one-sentence "what is
+            this node" + "how to use" tooltip. The icon is always visible
+            so users learn it exists; the tooltip is intentionally gated
+            (NodeTooltip's 300ms open delay) so panning across the canvas
+            doesn't fire a tooltip on every card the cursor brushes. */}
+        <NodeTooltip type={data.type}>
+          <button
+            type="button"
+            className="node-header__info"
+            aria-label={`Thông tin về ô ${describeNode(data.type).label.toLowerCase()}`}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span aria-hidden="true">ⓘ</span>
+          </button>
+        </NodeTooltip>
         {llmBusy && (
           // Compact pill so the busy state reads at a glance even if the
           // body is collapsed. Title is contextual: composing vs. analysing.
@@ -1546,7 +1564,7 @@ export function NodeCard(props: NodeProps<FlowNode>) {
             <button
               className="node-header__btn"
               onClick={handleDownload}
-              aria-label="Download media"
+              aria-label="Tải media xuống"
               title="Download"
               tabIndex={0}
             >
@@ -1557,8 +1575,8 @@ export function NodeCard(props: NodeProps<FlowNode>) {
             <button
               className={`node-header__btn${isRunning ? " node-header__btn--running" : ""}`}
               onClick={handleGenerate}
-              aria-label="Generate from this node"
-              title={llmBusy ? "Backend is still composing — try again in a moment" : "Generate"}
+              aria-label="Tạo từ ô này"
+              title={llmBusy ? "Backend vẫn đang soạn — thử lại sau ít giây" : "Generate"}
               tabIndex={0}
               disabled={llmBusy}
             >

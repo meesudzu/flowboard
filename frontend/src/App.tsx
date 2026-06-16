@@ -13,6 +13,7 @@ import { ResultViewer } from "./components/ResultViewer";
 import { ForcedSetupGate } from "./components/ForcedSetupGate";
 import { useBoardStore } from "./store/board";
 import { useReferencesStore } from "./store/references";
+import { useGenerationStore } from "./store/generation";
 
 export function App() {
   const loadInitialBoard = useBoardStore((s) => s.loadInitialBoard);
@@ -28,6 +29,13 @@ export function App() {
     // Fire-and-forget: panel renders the loading state inline and the
     // app stays usable even if references fail to hydrate.
     void loadReferences();
+    // Re-attach poll loops for any in-flight Request rows the backend
+    // has been processing while the page was reloaded — without this
+    // the in-memory `active` map starts empty and nodes fall back to
+    // whatever status was last persisted (typically "idle" for a node
+    // that never finished rendering), losing the "running" spinner
+    // even though Flow is still working on the variant.
+    void useGenerationStore.getState().rehydrateRunningPolls();
   }, [loadInitialBoard, loadReferences]);
 
   return (

@@ -29,12 +29,12 @@ const IMAGE_MODELS: { key: ImageModelKey; label: string; hint: string }[] = [
   {
     key: "NANO_BANANA_PRO",
     label: "Nano Banana Pro",
-    hint: "GEM_PIX_2 — premium, higher fidelity, slightly slower",
+    hint: "GEM_PIX_2 — cao cấp, độ trung thực cao hơn, hơi chậm hơn",
   },
   {
     key: "NANO_BANANA_2",
     label: "Nano Banana 2",
-    hint: "NARWHAL — faster, lighter checkpoint",
+    hint: "NARWHAL — nhanh hơn, checkpoint nhẹ hơn",
   },
 ];
 
@@ -51,25 +51,25 @@ const VIDEO_QUALITIES: {
   {
     key: "lite",
     label: "Veo 3.1 Lite",
-    hint: "Fastest generation, lightest model. Applies to both 16:9 and 9:16.",
+    hint: "Tạo nhanh nhất, model nhẹ nhất. Áp dụng cho cả 16:9 và 9:16.",
     ultraOnly: false,
   },
   {
     key: "fast",
     label: "Veo 3.1 Fast",
-    hint: "Default — balanced fidelity and speed. Applies to both 16:9 and 9:16.",
+    hint: "Mặc định — cân bằng giữa độ trung thực và tốc độ. Áp dụng cho cả 16:9 và 9:16.",
     ultraOnly: false,
   },
   {
     key: "quality",
     label: "Veo 3.1 Quality",
-    hint: "Highest fidelity, slowest. Best for hero shots. Applies to both 16:9 and 9:16.",
+    hint: "Độ trung thực cao nhất, chậm nhất. Phù hợp ảnh chính. Áp dụng cho cả 16:9 và 9:16.",
     ultraOnly: false,
   },
   {
     key: "lite_relaxed",
     label: "Veo 3.1 Lite (Low Priority)",
-    hint: "Same Lite checkpoint, low-priority queue — 0 credits. Slower turnaround when Flow is busy.",
+    hint: "Cùng checkpoint Lite, hàng đợi ưu tiên thấp — 0 credits. Quay chậm hơn khi Flow bận.",
     ultraOnly: true,
   },
 ];
@@ -284,7 +284,7 @@ export function SettingsPanel({ open, onClose, onLogout, logoutPending }: Settin
             target="_blank"
             rel="noopener noreferrer"
           >
-            FlowKit & Flowboard on Facebook →
+            FlowKit & Flowboard trên Facebook →
           </a>
         </div>
       </div>
@@ -300,7 +300,7 @@ export function SettingsPanel({ open, onClose, onLogout, logoutPending }: Settin
             onClick={onLogout}
             disabled={logoutPending}
           >
-            {logoutPending ? "Signing out…" : "Sign out from Flow account"}
+            {logoutPending ? "Signing out…" : "Đăng xuất khỏi tài khoản Flow"}
           </button>
           <div className="settings-panel__hint">
             Clears the cached identity and tells the extension to drop

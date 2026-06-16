@@ -664,15 +664,15 @@ export function ResultViewer() {
               <div className="result-viewer__busy-banner" role="status">
                 <span className="node-header__llm-spinner" aria-hidden="true" />
                 {data?.autoPromptStatus === "pending"
-                  ? "Composing prompt — actions disabled until done"
-                  : "Analyzing image — actions disabled until done"}
+                  ? "Đang soạn prompt — các nút bị tắt cho đến khi xong"
+                  : "Đang phân tích ảnh — các nút bị tắt cho đến khi xong"}
               </div>
             )}
             <button
               className="result-viewer__btn result-viewer__btn--primary"
               onClick={handleRegenerate}
               disabled={llmBusy}
-              title={llmBusy ? "Backend is busy on this node — try again in a moment" : undefined}
+              title={llmBusy ? "Backend đang bận trên ô này — thử lại sau ít giây" : undefined}
             >
               Regenerate ⌘R
             </button>
@@ -682,8 +682,8 @@ export function ResultViewer() {
               disabled={llmBusy}
               title={
                 llmBusy
-                  ? "Backend is busy on this node — try again in a moment"
-                  : "Clone this node onto the canvas with the same upstream refs"
+                  ? "Backend đang bận trên ô này — thử lại sau ít giây"
+                  : "Sao chép ô này lên canvas với cùng tham chiếu phía trên"
               }
             >
               New variant +
@@ -697,11 +697,11 @@ export function ResultViewer() {
               disabled={!currentMediaId || saving}
               title={
                 !currentMediaId
-                  ? "Wait for the generation to finish"
-                  : "Save this variant to the cross-board Reference library"
+                  ? "Đợi lượt tạo hoàn tất"
+                  : "Lưu biến thể này vào thư viện tham chiếu dùng chung"
               }
             >
-              {savedFlash ? "★ Saved" : saving ? "…" : "★ Save to library"}
+              {savedFlash ? "★ Saved" : saving ? "…" : "★ Lưu vào thư viện"}
             </button>
             {projectId ? (
               <a
@@ -729,7 +729,7 @@ export function ResultViewer() {
         <button
           className="result-viewer__close"
           onClick={closeResultViewer}
-          aria-label="Close result viewer"
+          aria-label="Đóng trình xem kết quả"
         >
           ×
         </button>

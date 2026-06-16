@@ -83,10 +83,10 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
           }}
           title={
             otherPlanRunning
-              ? "Another plan is currently running"
+              ? "Một kế hoạch khác đang chạy"
               : alreadyExecuted
-              ? "This plan has already been executed"
-              : "Materialise plan onto canvas and run generation"
+              ? "Kế hoạch này đã được thực thi"
+              : "Đưa kế hoạch lên canvas và chạy lượt tạo"
           }
         >
           {runLabel}
@@ -308,20 +308,20 @@ function ChatComposer() {
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Describe intent · # to mention a node"
+          placeholder="Mô tả ý tưởng · # để nhắc đến một ô"
           rows={2}
-          aria-label="Chat message"
+          aria-label="Tin nhắn trò chuyện"
           aria-autocomplete="list"
           aria-expanded={popoverOpen}
           disabled={pending}
         />
       </div>
       <div className="chat-composer__actions">
-        <span className="chat-composer__hint">↵ send · ⇧↵ newline · # mention</span>
+        <span className="chat-composer__hint">↵ gửi · ⇧↵ xuống dòng · # nhắc</span>
         <button
           className="chat-composer__send"
           disabled={!canSend}
-          aria-label="Send message"
+          aria-label="Gửi tin nhắn"
           onClick={() => {
             if (!canSend) return;
             const known = new Set(allCandidates.map((c) => c.shortId));
