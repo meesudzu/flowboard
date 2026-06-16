@@ -34,7 +34,7 @@ export const NODE_DESCRIPTIONS: Record<NodeType, NodeDescription> = {
     icon: "▣",
     label: "Ảnh",
     description:
-      "Ảnh tĩnh được tạo ra, lấy mọi media của các ô phía trên làm tham chiếu cho Flow (IMAGE_INPUT_TYPE_REFERENCE).",
+      "Ảnh tĩnh được tạo ra, lấy mọi media của các ô phía trên làm tham chiếu cho Flow.",
     tip: "Kết nối bao nhiêu nhân vật / sản phẩm / ảnh khác phía trên cũng được. Để trống prompt để LLM tự soạn prompt khác tư thế từ mô tả phía trên (1–4 biến thể mỗi lượt). Tỉ lệ mặc định kế thừa từ ô phía trên.",
   },
   Storyboard: {
