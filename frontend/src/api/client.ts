@@ -572,10 +572,12 @@ export async function uploadImageFromUrl(
 
 
 // ── LLM provider Settings ─────────────────────────────────────────────────
-// See .omc/plans/multi-llm-provider-legacy.md → UI Specification → Frontend ↔
-// backend contract for the full shape.
+// MiniMax-only build: there's a single LLM provider (MiniMax) in this
+// frontend/backend pair. The earlier multi-provider design (Claude /
+// Gemini / OpenAI Codex) was dropped — the cloud-VPS image doesn't
+// bundle any of those CLIs. Backend route: /api/llm/*.
 
-export type LLMProviderName = "claude" | "gemini" | "openai";
+export type LLMProviderName = "minimax";
 export type LLMFeature = "auto_prompt" | "vision" | "planner";
 export type LLMProviderMode = "cli" | "api" | "none";
 export type LLMLastError =

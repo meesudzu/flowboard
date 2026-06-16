@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLlmConfig,
   getLlmProviders,
+  setLlmApiKey,
   setLlmConfig,
   testLlmProvider,
   type LLMConfig,
@@ -12,65 +13,57 @@ import { ProviderCard } from "./ProviderCard";
 import { ProviderSetupModal } from "./ProviderSetupModal";
 
 /**
+ * MiniMax-only AI Providers section.
+ *
  * Single-provider model — one AI provider serves all 3 features
- * (Auto-Prompt / Vision / Planner). User picks one card, runs ONE
- * connection test, then Apply commits the change to all 3 features.
+ * (Auto-Prompt / Vision / Planner). The user pastes a MiniMax Bearer
+ * key, runs ONE connection test, then Apply commits the change to all
+ * 3 features.
  *
  * Why one test instead of three: in single-provider mode, the 3 tests
  * were 3 identical pings against the same endpoint with the same
- * prompt. Running them in parallel triggered Google's per-user
- * MODEL_CAPACITY_EXHAUSTED 429s on Gemini (the first call wins, the
- * other two retry-wait and often time out at 120s). Running them in
- * series is wasteful and slow. One ping is sufficient — if the provider
- * answers `.` once, all 3 dispatch paths can use it.
+ * prompt. Three parallel pings used to trigger rate limits on
+ * MiniMax (per-user concurrent call budget), so we collapsed to a
+ * single ping — if MiniMax answers `.` once, all 3 dispatch paths can
+ * use it.
  *
- * CLI-only philosophy: only OAuth-CLI providers are surfaced
- * (Claude / Gemini / OpenAI Codex). xAI Grok was considered but never
- * shipped an end-user CLI, so it was dropped from both UI and backend.
+ * MiniMax-only philosophy: the cloud-VPS image has no OAuth CLIs
+ * installed (Claude / Gemini / OpenAI Codex), so the only viable
+ * transport is REST. xAI Grok was considered but never shipped an
+ * end-user CLI. The earlier multi-provider design (CLI + REST) was
+ * removed for this build.
  *
  * Layout:
- *   1. Cards row — 3 OAuth provider cards
- *   2. Selection panel (visible only after a card is selected) —
- *      either inline setup (Setup help link) when the provider isn't
- *      ready, OR the connection test + Apply button when ready.
- *
- * Backend support: setLlmConfig accepts partial updates; we always send
- * all 3 features pointed at the same provider. The backend keeps its
- * per-feature routing capability so future power-user surfaces can opt
- * into the granular model — this dialog just constrains it for clarity.
+ *   1. MiniMax card
+ *   2. Selection panel (visible after card is selected):
+ *      a. Inline API-key paste (when no key set, or when "Update API
+ *         key" was clicked to rotate).
+ *      b. Connection test + Apply (when key is set).
  */
 
 const REFRESH_INTERVAL_MS = 30_000;
-// Order matters — this is the left-to-right card order in the dialog.
-// Gemini first (Google's most popular CLI), Claude middle, OpenAI Codex last.
-const SHOWN_PROVIDERS: LLMProviderName[] = ["gemini", "claude", "openai"];
-// First-run default selection. Gemini wins because it's free for personal
-// use, has the lowest CLI install friction, and (on a configured machine)
-// passes the test gate fastest. The user can still click any other card —
-// this just gives them a sensible starting point instead of a blank panel.
-const FIRST_RUN_DEFAULT: LLMProviderName = "gemini";
+// MiniMax-only: there's a single provider surfaced. Keeping the array
+// shape (instead of a single literal) so a future cloud-VPS image that
+// re-enables another API-key provider can add it by editing this file
+// only.
+const SHOWN_PROVIDERS: LLMProviderName[] = ["minimax"];
+// First-run default selection. The MiniMax card is the only one in
+// the cloud-VPS build, so it's also the default that gets
+// pre-selected on a fresh install to avoid a blank panel.
+const FIRST_RUN_DEFAULT: LLMProviderName = "minimax";
 
-// CLI install reference — shown as a footer under the test checklist so
-// users know how to upgrade / reinstall the CLI without leaving the
-// dialog. Docs URL points at the official repo / quickstart for each.
-const CLI_REFERENCE: Record<
+// No install command — MiniMax is REST-only. The record is keyed by
+// LLMProviderName so the CliReference component can stay generic, but
+// only the MiniMax entry is reachable from the UI. Unknown / disabled
+// entries carry empty URLs so the CliReference footer skips them
+// cleanly.
+const API_REFERENCE: Record<
   LLMProviderName,
-  { installCmd: string; docsUrl: string; docsLabel: string }
+  { docsUrl: string; docsLabel: string }
 > = {
-  claude: {
-    installCmd: "npm install -g @anthropic-ai/claude-code",
-    docsUrl: "https://docs.anthropic.com/en/docs/claude-code/quickstart",
-    docsLabel: "Anthropic docs",
-  },
-  gemini: {
-    installCmd: "npm install -g @google/gemini-cli",
-    docsUrl: "https://github.com/google-gemini/gemini-cli",
-    docsLabel: "Gemini CLI repo",
-  },
-  openai: {
-    installCmd: "npm install -g @openai/codex",
-    docsUrl: "https://github.com/openai/codex",
-    docsLabel: "Codex CLI repo",
+  minimax: {
+    docsUrl: "https://platform.minimax.io/docs/api-reference/text-post",
+    docsLabel: "MiniMax API reference",
   },
 };
 type TestState = "untested" | "testing" | "ok" | "fail";
@@ -106,9 +99,16 @@ export function AiProvidersSection() {
   const [pending, setPending] = useState<LLMProviderName | null>(null);
   const [test, setTest] = useState<ConnectionTestResult>(INITIAL_TEST);
   const [applying, setApplying] = useState(false);
+  // True when the user is replacing an already-saved API key (the
+  // "ready" branch normally hides the paste input; this flag re-shows
+  // it with a "rotate key" affordance).
+  const [editingKey, setEditingKey] = useState(false);
   const [helpFor, setHelpFor] = useState<LLMProviderName | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
+  // Module-level ref shared with ApiKeyInput so the input can no-op
+  // its setState after the component unmounts (the parent refreshes
+  // + re-renders after save, which would otherwise race against
+  // in-flight state updates).
   const aliveRef = useRef(true);
   useEffect(() => {
     aliveRef.current = true;
@@ -150,10 +150,10 @@ export function AiProvidersSection() {
   // cases:
   //   - User already has a configured provider → seed with it so Apply
   //     is a no-op until they pick something different.
-  //   - Fresh install (no current) → seed with FIRST_RUN_DEFAULT (Gemini)
-  //     so the panel opens with one card pre-selected and the user sees
-  //     the next-step CTA (Setup help OR test list) immediately, instead
-  //     of a blank state that hides what to do next.
+  //   - Fresh install (no current) → seed with FIRST_RUN_DEFAULT
+  //     (MiniMax) so the panel opens with the card pre-selected and
+  //     the user sees the API-key paste input immediately, instead of
+  //     a blank state.
   const current = deriveCurrent(config);
   useEffect(() => {
     if (pending !== null || config === null) return;
@@ -175,6 +175,7 @@ export function AiProvidersSection() {
     // Switching the candidate provider invalidates any prior test
     // result — it was against a different target.
     setTest(INITIAL_TEST);
+    setEditingKey(false);
   }
 
   async function runTest() {
@@ -198,7 +199,7 @@ export function AiProvidersSection() {
         vision: pending,
         planner: pending,
       });
-      showToast(`AI provider switched to ${labelOf(pending)}.`);
+      showToast(`Đã chuyển nhà cung cấp AI sang ${labelOf(pending)}.`);
       await refresh();
       // Broadcast so the badge + ForcedSetupGate refresh immediately
       // instead of waiting up to 30s for their own poll. Plain window
@@ -209,7 +210,7 @@ export function AiProvidersSection() {
       // just persisted the selection.
     } catch (err) {
       showToast(
-        `Couldn't apply: ${err instanceof Error ? err.message : String(err)}`,
+        `Không thể áp dụng: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
       if (aliveRef.current) setApplying(false);
@@ -234,13 +235,13 @@ export function AiProvidersSection() {
     return (
       <div className="ai-providers-section">
         <div className="ai-providers-section__error" role="alert">
-          ⚠ Couldn't load AI provider state.
+          ⚠ Không tải được trạng thái nhà cung cấp AI.
           <button
             type="button"
             className="ai-providers-section__retry"
             onClick={() => void refresh()}
           >
-            Retry
+            Thử lại
           </button>
           <div className="ai-providers-section__error-detail">{loadError}</div>
         </div>
@@ -250,9 +251,7 @@ export function AiProvidersSection() {
 
   // Past this point, providers + config are non-null.
   const byName: Record<LLMProviderName, LLMProviderInfo | undefined> = {
-    claude: providers!.find((p) => p.name === "claude"),
-    gemini: providers!.find((p) => p.name === "gemini"),
-    openai: providers!.find((p) => p.name === "openai"),
+    minimax: providers!.find((p) => p.name === "minimax"),
   };
 
   const pendingProvider = pending ? byName[pending] : null;
@@ -270,23 +269,27 @@ export function AiProvidersSection() {
   return (
     <div className="ai-providers-section">
       <div className="ai-providers-section__intro">
-        Pick which AI powers Flowboard. One provider serves all three
-        features — switching is one decision, not three.
+        MiniMax vận hành Flowboard trên bản này — dán API key, kiểm tra
+        kết nối, rồi bấm Áp dụng. Một nhà cung cấp phục vụ cả ba tính
+        năng (Tự viết prompt / Xem ảnh / Lập kế hoạch).
       </div>
 
       {current === null && config !== null && !config.configured
         && (config.auto_prompt || config.vision || config.planner) && (
         // Mixed-state notice — at least one feature has been pinned but
-        // not all three (or they diverge). Pick one card to consolidate.
+        // not all three (or they diverge). Click the card below to
+        // consolidate every feature onto MiniMax.
         <div className="ai-providers-section__mixed-notice" role="alert">
-          ⓘ Your providers don't match across features
+          ⓘ Các tính năng chưa dùng cùng nhà cung cấp
           ({config.auto_prompt ?? "—"} / {config.vision ?? "—"} / {config.planner ?? "—"}).
-          Pick one below and Apply to consolidate.
+          Bấm vào thẻ MiniMax bên dưới rồi Áp dụng để gộp lại.
         </div>
       )}
 
+      {/* MiniMax-only build: only the MiniMax card is rendered. The
+          `provider-group__title` is dropped because there's no
+          "OAuth vs API Key" distinction on the cloud-VPS image. */}
       <div className="provider-group">
-        <div className="provider-group__title">OAuth Providers</div>
         <div className="provider-group__cards">
           {SHOWN_PROVIDERS.map((name) => {
             const p = byName[name];
@@ -306,43 +309,64 @@ export function AiProvidersSection() {
 
       {pending && pendingProvider && (
         <div className="selection-panel">
-          {!ready ? (
-            // Setup-needed branch: surface install/auth guidance before
-            // letting the user attempt to test or apply.
-            <div className="selection-panel__setup">
-              <div className="selection-panel__heading">
-                {labelOf(pending)} needs setup
-              </div>
-              <div className="selection-panel__setup-text">
-                {pendingProvider.lastError === "not_authenticated"
-                  ? "The CLI is installed but not signed in. Open Setup help for the login command."
-                  : "Install the CLI from npm and sign in. Open Setup help for the exact commands."}
-              </div>
-              <button
-                type="button"
-                className="selection-panel__setup-btn"
-                onClick={() => setHelpFor(pending)}
-              >
-                Setup help →
-              </button>
-            </div>
+          {ready && pendingProvider.requiresKey && editingKey ? (
+            // Edit-in-place branch — the user clicked "Update API key"
+            // on an already-configured provider, so we re-render the
+            // paste input (with a Cancel button) on top of the
+            // test/apply row. Saving rotates the key in
+            // ~/.flowboard/secrets.json; the test row resets to
+            // "untested" so the next ping goes against the new key.
+            <ApiKeyInput
+              provider={pending}
+              editing
+              onSaved={async () => {
+                setEditingKey(false);
+                setTest(INITIAL_TEST);
+                await refresh();
+              }}
+              onCancel={() => setEditingKey(false)}
+            />
+          ) : !ready ? (
+            // API-key-only build: show a paste-key input. Saving
+            // the key moves the panel into the "ready" branch
+            // and the user can run the connection test.
+            <ApiKeyInput
+              provider={pending}
+              onSaved={refresh}
+              onShowHelp={() => setHelpFor(pending)}
+            />
           ) : (
             // Ready branch: provider is connected. Show ONE connection
             // test + Apply. One ping is sufficient — Auto-Prompt /
             // Vision / Planner all hit the same provider in
             // single-provider mode, so a working ping for one is a
-            // working ping for all three. (3 parallel pings used to
-            // trigger MODEL_CAPACITY_EXHAUSTED on Gemini's CodeAssist
-            // backend — Google throttles concurrent calls per user.)
+            // working ping for all three.
             <>
               <div className="selection-panel__heading">
-                Test the connection, then Apply
+                Kiểm tra kết nối, rồi bấm Áp dụng
               </div>
               <ConnectionTestRow
                 providerLabel={labelOf(pending)}
                 result={test}
                 onTest={runTest}
               />
+
+              {pendingProvider.requiresKey && (
+                // Rotate-key affordance sits directly under the test
+                // box (not below the Apply button) so the user can
+                // swap a leaked/expired key in one motion: Test →
+                // Update API key → Test again. Clicking flips the
+                // panel into the editingKey branch above; the next
+                // save overwrites ~/.flowboard/secrets.json in place.
+                <button
+                  type="button"
+                  className="selection-panel__update-key-btn"
+                  onClick={() => setEditingKey(true)}
+                >
+                  Cập nhật API key
+                </button>
+              )}
+
               <div className="selection-panel__actions">
                 <button
                   type="button"
@@ -351,21 +375,21 @@ export function AiProvidersSection() {
                   disabled={!canApply}
                   title={
                     selectionUnchanged
-                      ? `${labelOf(pending)} is already active.`
+                      ? `${labelOf(pending)} đã đang được dùng.`
                       : !testPassed
-                        ? "Run the connection test successfully to enable Apply."
-                        : `Apply ${labelOf(pending)} to all features.`
+                        ? "Chạy kiểm tra kết nối thành công để bật nút Áp dụng."
+                        : `Áp dụng ${labelOf(pending)} cho tất cả tính năng.`
                   }
                 >
                   {applying
-                    ? "Applying…"
+                    ? "Đang áp dụng…"
                     : selectionUnchanged
-                      ? "Already active"
-                      : "Apply changes"}
+                      ? "Đang dùng"
+                      : "Áp dụng thay đổi"}
                 </button>
               </div>
 
-              <CliReference provider={pending} />
+              <ApiReference provider={pending} />
             </>
           )}
         </div>
@@ -378,7 +402,7 @@ export function AiProvidersSection() {
       )}
 
       <ProviderSetupModal
-        provider={helpFor ?? "claude"}
+        provider={helpFor ?? "minimax"}
         open={helpFor !== null}
         onClose={() => setHelpFor(null)}
       />
@@ -406,12 +430,12 @@ function ConnectionTestRow({ providerLabel, result, onTest }: ConnectionTestRowP
           : "○";
   const subtitle =
     result.state === "ok" && result.latencyMs != null
-      ? `Connected · ${result.latencyMs}ms · powers Auto-Prompt, Vision, Planner`
+      ? `Đã kết nối · ${result.latencyMs}ms · phục vụ Tự viết prompt, Xem ảnh, Lập kế hoạch`
       : result.state === "fail" && result.error
         ? result.error
         : result.state === "testing"
-          ? "Pinging the CLI…"
-          : "Sends one tiny prompt to verify the CLI answers.";
+          ? "Đang gọi MiniMax…"
+          : "Gửi một prompt ngắn để kiểm tra MiniMax có phản hồi không.";
   return (
     <div className={`feature-test-row feature-test-row--${result.state}`}>
       <span
@@ -422,7 +446,7 @@ function ConnectionTestRow({ providerLabel, result, onTest }: ConnectionTestRowP
       </span>
       <div className="feature-test-row__body">
         <span className="feature-test-row__name">
-          {providerLabel} connection
+          Kết nối {providerLabel}
         </span>
         <span
           className={
@@ -443,74 +467,170 @@ function ConnectionTestRow({ providerLabel, result, onTest }: ConnectionTestRowP
         disabled={result.state === "testing"}
       >
         {result.state === "testing"
-          ? "Testing…"
+          ? "Đang kiểm tra…"
           : result.state === "ok"
-            ? "Re-test"
+            ? "Kiểm tra lại"
             : result.state === "fail"
-              ? "Retry"
-              : "Test"}
+              ? "Thử lại"
+              : "Kiểm tra"}
       </button>
     </div>
   );
 }
 
 /**
- * Footer shown below the test checklist with the install command + a
- * link to the CLI's official docs. Lets the user copy the upgrade
- * command without leaving the dialog and points them at the canonical
- * source if they need deeper setup help.
+ * Footer shown below the test checklist with a link to the provider's
+ * API reference docs. Replaces the old CLI install reference (no
+ * install commands in the API-only build) but keeps the same DOM
+ * shape so the surrounding layout doesn't shift.
  */
-interface CliReferenceProps {
+interface ApiReferenceProps {
   provider: LLMProviderName;
 }
 
-function CliReference({ provider }: CliReferenceProps) {
-  const ref = CLI_REFERENCE[provider];
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(ref.installCmd);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Silent — the command is selectable / readable as text fallback.
-    }
-  }
-
+function ApiReference({ provider }: ApiReferenceProps) {
+  const ref = API_REFERENCE[provider];
   return (
     <div className="cli-reference">
-      <div className="cli-reference__row">
-        <span className="cli-reference__label">Install / upgrade</span>
-        <code className="cli-reference__cmd">{ref.installCmd}</code>
-        <button
-          type="button"
-          className="cli-reference__copy-btn"
-          onClick={handleCopy}
-          aria-label="Copy install command"
-        >
-          {copied ? "✓ Copied" : "Copy"}
-        </button>
-      </div>
       <a
         className="cli-reference__docs-link"
         href={ref.docsUrl}
         target="_blank"
         rel="noopener noreferrer"
       >
-        Open {ref.docsLabel} ↗
+        Mở {ref.docsLabel} ↗
       </a>
     </div>
   );
 }
 
-function labelOf(name: LLMProviderName): string {
-  switch (name) {
-    case "claude":
-      return "Claude";
-    case "gemini":
-      return "Gemini";
-    case "openai":
-      return "OpenAI";
+/**
+ * Inline API-key paste row for providers that take a Bearer key. Shown
+ * when the user picks MiniMax on a fresh install (no key set yet)
+ * and also when they click "Update API key" on an already-configured
+ * provider (with `editing=true`). Save is gated on a non-empty
+ * value; the backend chmods secrets.json to 0o600 and busts the
+ * provider's availability cache so the panel flips to the "ready /
+ * test" branch immediately after a successful save.
+ */
+interface ApiKeyInputProps {
+  provider: LLMProviderName;
+  onSaved(): void | Promise<void>;
+  /** First-time-setup only — the "Setup help →" link. Omit when
+   *  `editing=true` since the user is past setup. */
+  onShowHelp?(): void;
+  /** True when the user is rotating an already-saved key. Flips the
+   *  copy (heading / hint) and swaps the "Setup help" CTA for a
+   *  Cancel button so the user can back out of the rotation without
+   *  saving. */
+  editing?: boolean;
+  /** Required when `editing=true`. Called from the Cancel button. */
+  onCancel?(): void;
+}
+
+function ApiKeyInput({ provider, onSaved, onShowHelp, editing, onCancel }: ApiKeyInputProps) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    if (!value.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await setLlmApiKey(provider, value.trim());
+      setSaved(true);
+      setValue("");
+      // Force the parent to re-fetch providers so the `ready` check
+      // flips and the panel moves into the test row.
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (aliveRefGlobal.current) setSaving(false);
+    }
   }
+
+  return (
+    <div className="selection-panel__setup">
+      <div className="selection-panel__heading">
+        {editing
+          ? `Cập nhật ${labelOf(provider)} API key`
+          : `${labelOf(provider)} cần một API key`}
+      </div>
+      <div className="selection-panel__setup-text">
+        {editing
+          ? `Dán Bearer key mới để thay thế key cũ. Key mới sẽ ghi đè entry cũ trong \`~/.flowboard/secrets.json\` và bài kiểm tra kết nối sẽ chạy lại với key mới.`
+          : `${labelOf(provider)} chỉ dùng API — dán Bearer key từ tài khoản của bạn, chúng tôi sẽ gọi endpoint thay bạn. Key được lưu trong \`~/.flowboard/secrets.json\` (quyền 600) và không bao giờ rời khỏi máy của bạn.`}
+      </div>
+      <div className="api-key-input">
+        <input
+          type="password"
+          className="api-key-input__field"
+          placeholder="sk-…"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSave();
+          }}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={saving}
+        />
+        <button
+          type="button"
+          className="api-key-input__save"
+          onClick={() => void handleSave()}
+          disabled={!value.trim() || saving}
+        >
+          {saving ? "Đang lưu…" : "Lưu khoá"}
+        </button>
+      </div>
+      {error && (
+        <div className="selection-panel__error" role="alert">
+          {error}
+        </div>
+      )}
+      {saved && !error && (
+        <div className="selection-panel__hint" role="status">
+          {editing
+            ? "✓ Đã cập nhật key — chạy kiểm tra kết nối để xác minh key mới."
+            : "✓ Đã lưu key — lần kiểm tra kết nối tiếp theo sẽ xác minh key từ đầu đến cuối."}
+        </div>
+      )}
+      {editing ? (
+        <button
+          type="button"
+          className="selection-panel__setup-btn"
+          onClick={() => onCancel?.()}
+        >
+          Huỷ
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="selection-panel__setup-btn"
+          onClick={() => onShowHelp?.()}
+        >
+          Hướng dẫn cài đặt →
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Module-level ref shared with ApiKeyInput so the input can no-op the
+// setState after the component unmounts (the parent refreshes + re-
+// renders after save, which would otherwise race against in-flight
+// state updates).
+const aliveRefGlobal = { current: true };
+
+function labelOf(_name: LLMProviderName): string {
+  // MiniMax-only build: the union has a single member.
+  return "MiniMax";
 }

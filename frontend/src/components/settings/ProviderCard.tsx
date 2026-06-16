@@ -2,17 +2,22 @@ import type { LLMProviderInfo, LLMProviderName } from "../../api/client";
 
 /**
  * One provider card — clickable tile that shows provider identity +
- * connection status + selection state. Used in the OAuth Providers and
- * API Key Providers groups inside AiProvidersSection.
+ * connection status + selection state. Used in the AI Providers section
+ * inside the Settings dialog.
  *
- * Visual contract (matches the screenshot reference):
+ * MiniMax-only build: this card always renders the MiniMax row. The
+ * CLI provider cards (Claude / Gemini / OpenAI Codex) were dropped —
+ * the cloud-VPS image doesn't bundle any of their CLIs, so showing
+ * "CLI not installed" rows would just be visual noise.
+ *
+ * Visual contract:
  *   - Logo dot + name on the left, status badge below
  *   - Right-edge indicator: filled when this card is the user's
  *     pending selection, hollow when not
  *   - Active border when selected; muted border otherwise
- *   - Disabled visual (lower opacity, no pointer) when the provider
- *     can't be activated yet (CLI missing for OAuth) — clicking still
- *     selects so the panel below can guide the user through setup.
+ *   - "Setup needed" or "API key needed" badge when the key isn't set
+ *     (clicking still selects so the panel below can guide the user
+ *     through pasting the key).
  */
 
 interface ProviderCardProps {
@@ -30,16 +35,13 @@ const PROVIDER_META: Record<
   LLMProviderName,
   { name: string; tagline: string }
 > = {
-  claude:  { name: "Claude Code",   tagline: "Anthropic CLI · OAuth" },
-  gemini:  { name: "Gemini CLI",    tagline: "Google CLI · OAuth" },
-  openai:  { name: "OpenAI Codex",  tagline: "ChatGPT CLI · OAuth" },
+  minimax: { name: "MiniMax", tagline: "Cloud API · Bearer key" },
 };
 
 function statusLabel(p: LLMProviderInfo): string {
-  if (p.available && p.configured) return "Connected";
-  if (p.lastError === "not_authenticated") return "Not signed in";
-  if (p.requiresKey && !p.configured) return "API key needed";
-  return "Setup needed";
+  if (p.available && p.configured) return "Đã kết nối";
+  if (p.requiresKey && !p.configured) return "Cần API key";
+  return "Cần cài đặt";
 }
 
 function statusKind(p: LLMProviderInfo): "ok" | "warn" {
@@ -69,7 +71,7 @@ export function ProviderCard({ provider, selected, current, onSelect }: Provider
           {statusLabel(provider)}
         </span>
         {current && !selected && (
-          <span className="provider-card__current-badge">Active</span>
+          <span className="provider-card__current-badge">Đang dùng</span>
         )}
       </div>
       <span
