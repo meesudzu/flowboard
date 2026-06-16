@@ -63,6 +63,15 @@ def list_activity(
     limit: int = Query(50, ge=1, le=200),
     before_id: Optional[int] = Query(None, ge=1),
     type: Optional[str] = Query(None, description="Comma-separated type filter"),
+    status: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated status filter (e.g. 'queued,running'). "
+            "Used on frontend boot to re-attach poll loops to in-flight "
+            "requests so a page reload doesn't drop the 'running' state "
+            "of nodes whose Request row is still being processed."
+        ),
+    ),
 ) -> dict:
     """Return the most recent N activity rows in DESC order by id.
 
@@ -73,6 +82,19 @@ def list_activity(
     type_filter: Optional[set[str]] = None
     if type:
         type_filter = {t.strip() for t in type.split(",") if t.strip()}
+    status_filter: Optional[set[str]] = None
+    if status:
+        # Whitelist so a typo / unknown value returns 422 instead of an
+        # empty list (the latter would silently hide in-flight work on
+        # boot — exactly the regression we just fixed).
+        allowed = {"queued", "running", "done", "failed", "timeout", "canceled"}
+        status_filter = {s.strip() for s in status.split(",") if s.strip()}
+        unknown = status_filter - allowed
+        if unknown:
+            raise HTTPException(
+                422,
+                f"unknown status value(s): {sorted(unknown)}",
+            )
 
     # `LIMIT limit + 1` lets us distinguish "exactly this many rows
     # exist" from "there's at least one more page" without a second
@@ -86,6 +108,8 @@ def list_activity(
             stmt = stmt.where(Request.id < before_id)
         if type_filter:
             stmt = stmt.where(Request.type.in_(type_filter))
+        if status_filter:
+            stmt = stmt.where(Request.status.in_(status_filter))
         rows = s.exec(stmt).all()
 
         has_more = len(rows) > limit

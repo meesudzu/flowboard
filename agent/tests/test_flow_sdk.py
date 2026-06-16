@@ -919,3 +919,164 @@ async def test_gen_image_propagates_prominent_people_filter():
     assert "error" in out
     assert "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED" in out["error"]
     assert "media_ids" not in out
+
+
+# ── workflow-mode transient poll failures ─────────────────────────────────
+# Flow's `/v1/media/<id>` endpoint can briefly return 5xx (or 429) while
+# the underlying workflow is still rendering on Google's side. The OLD
+# schema (batchCheckAsync) handles this naturally — a 5xx produces an
+# empty `data.operations[]` so the poller sees `done=False`. The NEW
+# workflow path in `_poll_workflows` must match that resilience, otherwise
+# the worker terminates a still-in-flight variant on the first transient
+# hiccup and the user sees "Internal error encountered." even though the
+# video is being generated on Flow.
+
+
+@pytest.mark.asyncio
+async def test_check_async_workflow_mode_5xx_is_transient_keeps_polling():
+    """A 500 from `/v1/media/<id>` mid-render must NOT mark the workflow op
+    as done. The worker's outer poll loop will retry on the next cycle,
+    and the video is typically already in flight on Flow's side."""
+
+    class _BoomClient(RecordingClient):
+        async def api_request(self, **kwargs):
+            self.api_calls.append(kwargs)
+            return {
+                "id": "boom-1",
+                "status": 500,
+                "data": {
+                    "error": {
+                        "code": 500,
+                        "message": "Internal error encountered.",
+                        "status": "INTERNAL",
+                    }
+                },
+            }
+
+    c = _BoomClient()
+    sdk = FlowSDK(client=c)  # type: ignore[arg-type]
+    out = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-vid-1"}],
+    )
+    ops = out["operations"]
+    assert len(ops) == 1
+    assert ops[0]["name"] == "wf-uuid"
+    assert ops[0]["done"] is False, "5xx must be treated as transient"
+    assert ops[0]["error"] is None
+    assert ops[0]["media_entries"] == []
+    # The raw poll is still surfaced so the worker can stash it for the
+    # activity-detail viewer (matches the OLD-schema contract).
+    assert out["raw"]["workflow_polls"][0]["resp"]["status"] == 500
+
+
+@pytest.mark.asyncio
+async def test_check_async_workflow_mode_429_is_transient_keeps_polling():
+    """429 (rate limited) gets the same transient treatment as 5xx."""
+
+    class _RateLimitedClient(RecordingClient):
+        async def api_request(self, **kwargs):
+            self.api_calls.append(kwargs)
+            return {
+                "id": "rl-1",
+                "status": 429,
+                "data": {"error": {"code": 429, "message": "rate limited", "status": "UNAVAILABLE"}},
+            }
+
+    c = _RateLimitedClient()
+    sdk = FlowSDK(client=c)  # type: ignore[arg-type]
+    out = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-vid-1"}],
+    )
+    assert out["operations"][0]["done"] is False
+    assert out["operations"][0]["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_check_async_workflow_mode_4xx_still_terminal():
+    """4xx (non-404) is a real per-op error and must remain terminal —
+    we only softened the 5xx/429 path. 401/400/403 etc. should still
+    surface the inner Flow error so the worker bails instead of
+    polling for the full timeout on a hopeless variant."""
+
+    class _BadClient(RecordingClient):
+        async def api_request(self, **kwargs):
+            self.api_calls.append(kwargs)
+            return {
+                "id": "bad-1",
+                "status": 400,
+                "data": {
+                    "error": {
+                        "code": 400,
+                        "status": "INVALID_ARGUMENT",
+                        "message": "Request contains an invalid argument.",
+                        "details": [
+                            {"reason": "PUBLIC_ERROR_UNSAFE_GENERATION"},
+                        ],
+                    }
+                },
+            }
+
+    c = _BadClient()
+    sdk = FlowSDK(client=c)  # type: ignore[arg-type]
+    out = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-vid-1"}],
+    )
+    ops = out["operations"]
+    assert ops[0]["done"] is True
+    assert "PUBLIC_ERROR_UNSAFE_GENERATION" in (ops[0]["error"] or "")
+    assert ops[0]["media_entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_check_async_workflow_mode_recovery_after_5xx():
+    """End-to-end: first poll is 500 (transient → not done), second poll
+    returns valid MP4 bytes (→ done). Mirrors the exact failure mode from
+    the field report — 500 on cycle N, then a few cycles later the video
+    actually lands. Without the fix the workflow op would have been
+    terminated on cycle 1 and the variant would never have been ingested."""
+    import base64 as _b64
+
+    state = {"calls": 0}
+
+    class _FlakyClient(RecordingClient):
+        async def api_request(self, **kwargs):
+            self.api_calls.append(kwargs)
+            state["calls"] += 1
+            if state["calls"] == 1:
+                return {
+                    "id": "flaky-1",
+                    "status": 500,
+                    "data": {"error": {"code": 500, "message": "Internal error encountered.", "status": "INTERNAL"}},
+                }
+            return {
+                "status": 200,
+                "data": {
+                    "video": {
+                        "encodedVideo": _b64.b64encode(_mp4_bytes()).decode(),
+                        "fifeUrl": "https://flow-content.google/video/primary-vid-1?sig=x",
+                    }
+                },
+            }
+
+    c = _FlakyClient()
+    sdk = FlowSDK(client=c)  # type: ignore[arg-type]
+
+    # Cycle 1: 500 → transient, op stays unresolved.
+    out1 = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-vid-1"}],
+    )
+    assert out1["operations"][0]["done"] is False
+    assert out1["operations"][0]["error"] is None
+
+    # Cycle 2: 200 + valid ftyp bytes → done with media entry.
+    out2 = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-vid-1"}],
+    )
+    assert out2["operations"][0]["done"] is True
+    assert out2["operations"][0]["media_entries"][0]["media_id"] == "primary-vid-1"
+    assert "encoded_video" in out2["operations"][0]["media_entries"][0]

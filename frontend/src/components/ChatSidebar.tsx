@@ -57,16 +57,16 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
   const alreadyExecuted = plan.status === "done" || plan.status === "running";
 
   let runLabel: string;
-  if (isThisPlanRunning) runLabel = activeRun?.status === "pending" ? "Queued…" : "Running…";
-  else if (plan.status === "done") runLabel = "Done";
-  else if (plan.status === "failed") runLabel = "Failed";
-  else runLabel = "Run";
+  if (isThisPlanRunning) runLabel = activeRun?.status === "pending" ? "Đang xếp hàng…" : "Đang chạy…";
+  else if (plan.status === "done") runLabel = "Xong";
+  else if (plan.status === "failed") runLabel = "Thất bại";
+  else runLabel = "Chạy";
 
   const disabled = isThisPlanRunning || otherPlanRunning || alreadyExecuted;
 
   return (
     <div className="plan-preview-card">
-      <div className="plan-preview-card__title">Pipeline proposed</div>
+      <div className="plan-preview-card__title">Pipeline đề xuất</div>
       <div className="plan-preview-card__sketch">
         {dots}
         {overflow > 0 && (
@@ -83,10 +83,10 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
           }}
           title={
             otherPlanRunning
-              ? "Another plan is currently running"
+              ? "Một kế hoạch khác đang chạy"
               : alreadyExecuted
-              ? "This plan has already been executed"
-              : "Materialise plan onto canvas and run generation"
+              ? "Kế hoạch này đã được thực thi"
+              : "Đưa kế hoạch lên canvas và chạy lượt tạo"
           }
         >
           {runLabel}
@@ -308,20 +308,20 @@ function ChatComposer() {
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Describe intent · # to mention a node"
+          placeholder="Mô tả ý tưởng · # để nhắc đến một ô"
           rows={2}
-          aria-label="Chat message"
+          aria-label="Tin nhắn trò chuyện"
           aria-autocomplete="list"
           aria-expanded={popoverOpen}
           disabled={pending}
         />
       </div>
       <div className="chat-composer__actions">
-        <span className="chat-composer__hint">↵ send · ⇧↵ newline · # mention</span>
+        <span className="chat-composer__hint">↵ gửi · ⇧↵ xuống dòng · # nhắc</span>
         <button
           className="chat-composer__send"
           disabled={!canSend}
-          aria-label="Send message"
+          aria-label="Gửi tin nhắn"
           onClick={() => {
             if (!canSend) return;
             const known = new Set(allCandidates.map((c) => c.shortId));
@@ -368,7 +368,7 @@ export function ChatSidebar() {
   return (
     <aside className="sidebar chat">
       <header className="chat__header">
-        <span className="chat__label">CHAT</span>
+        <span className="chat__label">TRÒ CHUYỆN</span>
         {boardName && (
           <>
             <span className="chat__scope-sep">&nbsp;·&nbsp;</span>

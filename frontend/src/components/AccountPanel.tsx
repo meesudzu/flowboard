@@ -31,7 +31,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<AuthMe | null>(null);
   // Counts polls that returned a profile but no tier. Used to delay
-  // the "Tier unknown" banner so it doesn't flash on initial cold-start
+  // the "Tier chưa rõ" banner so it doesn't flash on initial cold-start
   // while the extension is still doing its first round-trip.
   const [pollsWithoutTier, setPollsWithoutTier] = useState(0);
   // Scan / logout transient state for button affordances.
@@ -78,7 +78,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
 
   // Logout: clears agent-side cache + tells extension to drop in-memory
   // identity. Resets local state immediately so the chip flips to the
-  // "Not connected" affordance without waiting for the next poll tick.
+  // "Chưa kết nối" affordance without waiting for the next poll tick.
   async function handleLogout() {
     if (logoutPending) return;
     setLogoutPending(true);
@@ -148,7 +148,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
 
   const tier = profile?.paygate_tier ?? null;
 
-  const displayName = profile?.name?.trim() || "Flow account";
+  const displayName = profile?.name?.trim() || "Tài khoản Flow";
   const email = profile?.email ?? null;
   const picture = profile?.picture ?? null;
   const initial = displayName.slice(0, 1).toUpperCase();
@@ -176,7 +176,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
           !email ? " account-panel--disconnected" : ""
         }`}
         role="region"
-        aria-label="Account"
+        aria-label="Tài khoản"
       >
         {/* Avatar + cog only render when an extension session is live —
             without an email there's no profile to show and the settings
@@ -216,7 +216,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             {(tier || creditsLabel) && (
               <div
                 className="account-panel__status-row"
-                title={tier ? `${tierLabel}${creditsLabel ? ` · ${creditsLabel} credits remaining` : ""}` : undefined}
+                title={tier ? `${tierLabel}${creditsLabel ? ` · ${creditsLabel} credits còn lại` : ""}` : undefined}
               >
                 {tier && (
                   <span
@@ -232,7 +232,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                 {creditsLabel && (
                   <span
                     className="account-panel__credits-inline"
-                    title={`${creditsLabel} credits remaining`}
+                    title={`${creditsLabel} credits còn lại`}
                   >
                     <span className="account-panel__credits-value">{creditsLabel}</span>
                   </span>
@@ -242,7 +242,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
           </div>
         )}
         {!collapsed && !email && (
-          // Disconnected — skip the placeholder "Flow account" / "Connected
+          // Disconnected — skip the placeholder "Tài khoản Flow" / "Connected
           // via extension" copy entirely. When the scan probe says no
           // extension is reachable, swap the bare button for a short
           // recovery hint so the user knows the concrete next steps
@@ -255,15 +255,15 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                   ⚠ Extension not detected
                 </span>
                 <span className="account-panel__scan-hint-text">
-                  Refresh the Flow tab, then reload the Flowboard extension.
+                  Tải lại tab Flow, rồi tải lại tiện ích Flowboard.
                 </span>
                 <button
                   type="button"
                   className="account-panel__scan-btn"
                   onClick={handleScan}
-                  title="Scan again for an extension connection"
+                  title="Quét lại kết nối tiện ích"
                 >
-                  Try again
+                  Thử lại
                 </button>
               </div>
             ) : (
@@ -272,9 +272,9 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
                 className="account-panel__scan-btn"
                 onClick={handleScan}
                 disabled={scanState === "scanning"}
-                title="Scan for an extension connection and re-fetch user info"
+                title="Quét kết nối tiện ích và tải lại thông tin người dùng"
               >
-                {scanState === "scanning" ? "Scanning…" : "🔍 Scan extension"}
+                {scanState === "scanning" ? "Đang quét…" : "🔍 Scan extension"}
               </button>
             )}
           </div>
@@ -284,8 +284,8 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             type="button"
             className="account-panel__cog"
             onClick={() => setOpen((v) => !v)}
-            aria-label="Open settings"
-            title="Settings"
+            aria-label="Mở cài đặt"
+            title="Cài đặt"
           >
             ⚙
           </button>
@@ -320,10 +320,10 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
           <span className="account-panel__tier-warning-icon" aria-hidden="true">⚠</span>
           <div className="account-panel__tier-warning-body">
             <span className="account-panel__tier-warning-title">
-              Tier unknown
+              Tier chưa rõ
             </span>
             <span className="account-panel__tier-warning-text">
-              Open Flow once so the extension can detect your plan.
+              Mở Flow một lần để tiện ích nhận diện gói của bạn.
             </span>
           </div>
           <a
@@ -332,7 +332,7 @@ export function AccountPanel({ collapsed = false }: { collapsed?: boolean }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Flow ↗
+            Mở trong Flow ↗
           </a>
         </div>
       )}

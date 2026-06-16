@@ -52,7 +52,7 @@ function JsonSection({ label, data, startOpen = false }: JsonSectionProps) {
             className="activity-detail__copy-btn"
             onClick={handleCopy}
           >
-            {copied ? "✓ Copied" : "Copy"}
+            {copied ? "✓ Đã sao chép" : "Sao chép"}
           </button>
         )}
       </button>
@@ -114,7 +114,7 @@ export function ActivityDetailModal({ activityId, onClose }: ActivityDetailModal
             type="button"
             className="activity-detail__close"
             onClick={onClose}
-            aria-label="Close detail"
+            aria-label="Đóng chi tiết"
           >
             ×
           </button>
@@ -129,7 +129,7 @@ export function ActivityDetailModal({ activityId, onClose }: ActivityDetailModal
         {detail && (
           <>
             <dl className="activity-detail__meta">
-              <dt>Status</dt>
+              <dt>Trạng thái</dt>
               <dd>
                 <span
                   className={`activity-detail__status activity-detail__status--${
@@ -141,15 +141,15 @@ export function ActivityDetailModal({ activityId, onClose }: ActivityDetailModal
               </dd>
               {detail.node_short_id && (
                 <>
-                  <dt>Node</dt>
+                  <dt>Ô</dt>
                   <dd>#{detail.node_short_id}</dd>
                 </>
               )}
-              <dt>Started</dt>
+              <dt>Bắt đầu</dt>
               <dd>{detail.created_at}</dd>
               {detail.finished_at && (
                 <>
-                  <dt>Finished</dt>
+                  <dt>Kết thúc</dt>
                   <dd>
                     {detail.finished_at}
                     {detail.duration_ms !== null && (
@@ -163,14 +163,14 @@ export function ActivityDetailModal({ activityId, onClose }: ActivityDetailModal
             </dl>
 
             <JsonSection
-              label="INPUT (params)"
+              label="INPUT (tham số)"
               data={detail.params}
-              startOpen={detail.status !== "failed"}
+              startOpen={detail.status !== "thất bại"}
             />
             <JsonSection
-              label="OUTPUT (result)"
+              label="OUTPUT (kết quả)"
               data={detail.result}
-              startOpen={detail.status === "done"}
+              startOpen={detail.status === "xong"}
             />
             <div
               className={`activity-detail__section${

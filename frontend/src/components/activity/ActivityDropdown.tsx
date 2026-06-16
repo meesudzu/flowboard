@@ -44,9 +44,9 @@ export function ActivityDropdown({
   }, [onClose]);
 
   return (
-    <div ref={panelRef} className="activity-dropdown" role="dialog" aria-label="Activity">
+    <div ref={panelRef} className="activity-dropdown" role="dialog" aria-label="Hoạt động">
       <div className="activity-dropdown__header">
-        <span className="activity-dropdown__title">Activity</span>
+        <span className="activity-dropdown__title">Hoạt động</span>
         <span className="activity-dropdown__count">
           {items.length} {items.length === 1 ? "item" : "items"}
         </span>
@@ -54,7 +54,7 @@ export function ActivityDropdown({
           type="button"
           className="activity-dropdown__close"
           onClick={onClose}
-          aria-label="Close activity"
+          aria-label="Đóng hoạt động"
         >
           ×
         </button>
@@ -66,7 +66,7 @@ export function ActivityDropdown({
         )}
         {!loading && items.length === 0 && (
           <div className="activity-dropdown__placeholder">
-            No activity yet. Run a generation or open Auto-Prompt to populate the feed.
+            Chưa có hoạt động nào. Tạo ảnh hoặc mở Tự viết prompt để bắt đầu.
           </div>
         )}
         {items.map((item) => (

@@ -25,7 +25,7 @@ const VIDEO_QUALITY_LABELS: Record<string, string> = {
   lite: "Lite",
   fast: "Fast",
   quality: "Quality",
-  lite_relaxed: "Lite (Low Priority)",
+  lite_relaxed: "Lite (Ưu tiên thấp)",
   // Omni Flash dispatches stamp the per-duration model key directly
   // (resolve_omni_flash_model: abra_r2v_4s / 6s / 8s / 10s). Map all
   // four to a single "Omni Flash · Ns" label so the detail panel
@@ -104,7 +104,7 @@ export function ResultViewer() {
   // METADATA model label. Two tiers:
   //   - `isBadge: true` — node was generated AFTER the model-stamp feature
   //     shipped, so we know the exact model that produced it. Render as
-  //     a pill (matches the Settings "Ultra only" badge visual language).
+  //     a pill (matches the Settings "Chỉ Ultra" badge visual language).
   //   - `isBadge: false` — old node, or unrenderable type (prompt/note),
   //     or upload (no model). Render as plain text so the visual
   //     difference signals "estimate vs ground truth".
@@ -318,11 +318,11 @@ export function ResultViewer() {
 
   let hintText: string;
   if (status === null) {
-    hintText = "Loading…";
+    hintText = "Đang tải…";
   } else if (!status.has_url) {
-    hintText = "Open your project on labs.google/flow so Flowboard can capture the image URL.";
+    hintText = "Mở dự án trên labs.google/flow để Flowboard có thể lấy URL ảnh.";
   } else {
-    hintText = "Fetching bytes from Google…";
+    hintText = "Đang tải byte từ Google…";
   }
 
   // Blocks the three generation-flow buttons (Edit prompt, Regenerate,
@@ -364,7 +364,7 @@ export function ResultViewer() {
       ).filter((m): m is string => typeof m === "string" && m.length > 0);
       if (sourceMediaIds.length === 0) {
         useGenerationStore.setState({
-          error: "Video re-gen needs an upstream image with rendered media.",
+          error: "Video re-gen cần một ảnh phía trên đã có media được tạo.",
         });
         return;
       }
@@ -407,7 +407,7 @@ export function ResultViewer() {
 
   // Save the currently-viewed variant to the cross-board Reference
   // library. Backend POST is idempotent on media_id, so multi-clicking
-  // is safe — we still flip the button to "Saved" for 1.5s for feedback.
+  // is safe — we still flip the button to "Đã lưu" for 1.5s for feedback.
   // (State declared at the top of the component to satisfy Rules of Hooks.)
 
   async function handleSaveToLibrary() {
@@ -508,13 +508,12 @@ export function ResultViewer() {
               // whether to retry, change inputs, or accept the loss.
               <div className="media-placeholder__content media-placeholder__content--blocked">
                 <span className="media-placeholder__icon media-placeholder__icon--warn" aria-hidden="true">⚠</span>
-                <span className="media-placeholder__title">Variant blocked</span>
+                <span className="media-placeholder__title">Biến thể bị chặn</span>
                 <span className="media-placeholder__error-code">{slotError}</span>
                 <span className="media-placeholder__error-hint">
-                  This variant was rejected by Google&apos;s safety filter. The
-                  other variants in this batch rendered normally — try
-                  re-running just this slot, or tweak the upstream image /
-                  prompt to avoid the trigger.
+                  Biến thể này bị bộ lọc an toàn của Google từ chối. Các biến
+                  thể khác trong lô đã tạo bình thường — thử tạo lại riêng ô
+                  này, hoặc chỉnh ảnh tham chiếu / prompt để tránh bị chặn.
                 </span>
               </div>
             ) : (
@@ -535,7 +534,7 @@ export function ResultViewer() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {currentMediaId && (
               <button className="media-placeholder__refresh" onClick={handleRefresh}>
-                Refresh
+                Tải lại
               </button>
             )}
             {/* Variant switcher — chips for each slot. Blocked slots
@@ -543,7 +542,7 @@ export function ResultViewer() {
                 the user can scan the strip and see at a glance which
                 variants succeeded vs failed. */}
             {mediaIds.length > 0 && (
-              <div className="variant-switcher" role="group" aria-label="Variant selection">
+              <div className="variant-switcher" role="group" aria-label="Chọn biến thể">
                 {mediaIds.map((_id, idx) => {
                   const chipError = data?.slotErrors?.[idx] ?? null;
                   const blocked = chipError !== null && chipError !== undefined;
@@ -567,7 +566,7 @@ export function ResultViewer() {
 
         {/* Right panel — metadata */}
         <div className="result-viewer__right">
-          <div className="result-viewer__status-pill">Rendered</div>
+          <div className="result-viewer__status-pill">Đã tạo</div>
 
           <h2 id="result-viewer-title" className="result-viewer__node-title">
             {data.title}
@@ -576,22 +575,22 @@ export function ResultViewer() {
 
           <hr className="result-viewer__divider" />
 
-          <span className="result-viewer__section-label">PROMPT</span>
-          <p className="result-viewer__prompt">{data.prompt ?? "(no prompt)"}</p>
+          <span className="result-viewer__section-label">LỜI NHẮC</span>
+          <p className="result-viewer__prompt">{data.prompt ?? "(chưa có prompt)"}</p>
           <button
             className="result-viewer__edit-prompt"
             onClick={handleEditPrompt}
             disabled={llmBusy}
-            title={llmBusy ? "Backend is composing — try again in a moment" : undefined}
+            title={llmBusy ? "Backend đang soạn — thử lại sau ít giây" : undefined}
           >
-            Edit prompt →
+            Sửa prompt →
           </button>
 
           {refSourceNodes.length > 0 && (
             <>
               <hr className="result-viewer__divider" />
               <span className="result-viewer__section-label">
-                SOURCE REFERENCES ({refSourceNodes.length})
+                THAM CHIẾU NGUỒN ({refSourceNodes.length})
               </span>
               <div className="ref-source-row">
                 {refSourceNodes.map((r) => (
@@ -625,7 +624,7 @@ export function ResultViewer() {
 
           <hr className="result-viewer__divider" />
 
-          <span className="result-viewer__section-label">METADATA</span>
+          <span className="result-viewer__section-label">THÔNG TIN</span>
           <dl className="result-viewer__metadata-grid">
             <dt>model</dt>
             <dd>
@@ -637,7 +636,7 @@ export function ResultViewer() {
             </dd>
             {data?.type === "character" && countryLabel(data.charCountry) && (
               <>
-                <dt>country</dt>
+                <dt>quốc gia</dt>
                 <dd>
                   <span className="model-badge">{countryLabel(data.charCountry)}</span>
                 </dd>
@@ -645,15 +644,15 @@ export function ResultViewer() {
             )}
             {data?.type === "character" && vibeLabel(data.charVibe) && (
               <>
-                <dt>vibe</dt>
+                <dt>phong cách</dt>
                 <dd>
                   <span className="model-badge">{vibeLabel(data.charVibe)}</span>
                 </dd>
               </>
             )}
-            <dt>aspect</dt>
+            <dt>tỉ lệ</dt>
             <dd>{formatAspectRatio(data?.aspectRatio)}</dd>
-            <dt>time</dt>
+            <dt>thời gian</dt>
             <dd>{formatRelativeTime(data?.renderedAt)}</dd>
           </dl>
 
@@ -664,17 +663,17 @@ export function ResultViewer() {
               <div className="result-viewer__busy-banner" role="status">
                 <span className="node-header__llm-spinner" aria-hidden="true" />
                 {data?.autoPromptStatus === "pending"
-                  ? "Composing prompt — actions disabled until done"
-                  : "Analyzing image — actions disabled until done"}
+                  ? "Đang soạn prompt — các nút bị tắt cho đến khi xong"
+                  : "Đang phân tích ảnh — các nút bị tắt cho đến khi xong"}
               </div>
             )}
             <button
               className="result-viewer__btn result-viewer__btn--primary"
               onClick={handleRegenerate}
               disabled={llmBusy}
-              title={llmBusy ? "Backend is busy on this node — try again in a moment" : undefined}
+              title={llmBusy ? "Backend đang bận trên ô này — thử lại sau ít giây" : undefined}
             >
-              Regenerate ⌘R
+              Tạo lại ⌘R
             </button>
             <button
               className="result-viewer__btn"
@@ -682,11 +681,11 @@ export function ResultViewer() {
               disabled={llmBusy}
               title={
                 llmBusy
-                  ? "Backend is busy on this node — try again in a moment"
-                  : "Clone this node onto the canvas with the same upstream refs"
+                  ? "Backend đang bận trên ô này — thử lại sau ít giây"
+                  : "Sao chép ô này lên canvas với cùng tham chiếu phía trên"
               }
             >
-              New variant +
+              Biến thể mới +
             </button>
             <button
               className={
@@ -697,11 +696,11 @@ export function ResultViewer() {
               disabled={!currentMediaId || saving}
               title={
                 !currentMediaId
-                  ? "Wait for the generation to finish"
-                  : "Save this variant to the cross-board Reference library"
+                  ? "Đợi lượt tạo hoàn tất"
+                  : "Lưu biến thể này vào thư viện tham chiếu dùng chung"
               }
             >
-              {savedFlash ? "★ Saved" : saving ? "…" : "★ Save to library"}
+              {savedFlash ? "★ Đã lưu" : saving ? "…" : "★ Lưu vào thư viện"}
             </button>
             {projectId ? (
               <a
@@ -729,7 +728,7 @@ export function ResultViewer() {
         <button
           className="result-viewer__close"
           onClick={closeResultViewer}
-          aria-label="Close result viewer"
+          aria-label="Đóng trình xem kết quả"
         >
           ×
         </button>

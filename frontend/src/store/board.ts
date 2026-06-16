@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Edge, Node } from "@xyflow/react";
+import { TYPE_TITLE } from "../canvas/nodeDescriptions";
 import {
   listBoards,
   createBoard,
@@ -132,17 +133,6 @@ function debouncePosition(rfId: string, fn: () => void, delay = 150) {
     fn();
   }, delay));
 }
-
-// ── Type-to-title lookup ───────────────────────────────────────────────────
-const TYPE_TITLE: Record<NodeType, string> = {
-  character: "Character",
-  image: "Image",
-  video: "Video",
-  prompt: "Prompt",
-  note: "Note",
-  visual_asset: "Visual asset",
-  Storyboard: "Storyboard",
-};
 
 // ── Persisted active-board id ─────────────────────────────────────────────
 // Survives page reloads so refreshing on project #4 doesn't kick the user

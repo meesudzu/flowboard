@@ -1,4 +1,9 @@
-"""HTTP routes for the multi-LLM provider Settings UI.
+"""HTTP routes for the AI provider Settings UI.
+
+MiniMax-only build: a single provider (MiniMax) is registered. The
+endpoints below are the contract the frontend `SettingsPanel` /
+`AiProviderDialog` use to render the API-key input + Test button +
+Apply flow.
 
 Endpoints:
   GET  /api/llm/providers           — list with state per provider
@@ -6,10 +11,6 @@ Endpoints:
   POST /api/llm/providers/{name}/test — connection ping
   GET  /api/llm/config              — read active feature → provider mapping
   PUT  /api/llm/config              — update mapping
-
-Frontend ↔ backend contract is documented in detail in
-``.omc/plans/multi-llm-provider-legacy.md`` (UI Specification → Frontend
-↔ backend contract section).
 
 API keys are accepted only via PUT /providers/{name} and never echoed
 back. The list endpoint reports `configured: true/false` instead.
@@ -25,7 +26,6 @@ from pydantic import BaseModel
 
 from flowboard.services.llm import registry, secrets
 from flowboard.services.llm.base import LLMError
-from flowboard.services import claude_cli
 
 logger = logging.getLogger(__name__)
 
@@ -50,19 +50,12 @@ class _ConfigBody(BaseModel):
 # Whitelist for the writable feature → provider mapping. Hand-edited
 # secrets.json with garbage values is tolerated by `read_active_providers`,
 # but the HTTP surface must reject input that wouldn't route anywhere.
-_VALID_PROVIDER_NAMES = {"claude", "gemini", "openai"}
+# MiniMax-only: this is the single accepted value everywhere.
+_VALID_PROVIDER_NAMES = {"minimax"}
 _VALID_FEATURES = ("auto_prompt", "vision", "planner")
 
 
 # ── GET /api/llm/providers ────────────────────────────────────────────
-
-
-@router.post("/debug/reset-probe")
-async def debug_reset_probe() -> dict:
-    """Force re-probe Claude CLI (debug endpoint)."""
-    claude_cli.reset_availability_cache()
-    available = await claude_cli.is_available(force=True)
-    return {"ok": True, "claude_available": available}
 
 
 @router.get("/providers")
@@ -71,36 +64,21 @@ async def list_providers() -> list[dict]:
 
     Each entry carries everything the UI needs to render the right row
     state without follow-up calls. `configured` reports whether the user
-    has done setup (CLI: same as `available`; API: key present, regardless
-    of test outcome). `mode` is meaningful only for OpenAI ("cli"/"api"/"none").
+    has done setup (key present in secrets.json). `mode` is always `'api'`
+    for MiniMax — no CLI branch.
     """
     out: list[dict] = []
     for provider in registry.list_providers():
-        # CLI providers: available implies configured. API providers:
-        # `configured` means a key exists; `available` adds "key works"
-        # via the cached probe. Splitting the two lets the UI distinguish
-        # "user has set things up but the key is bad" from "user hasn't
-        # set anything up yet".
         available = await provider.is_available()
-        if provider.name == "openai":
-            mode = provider.mode  # type: ignore[attr-defined]
-            configured = (
-                bool(secrets.get_api_key("openai"))
-                or getattr(provider, "_cli_available", False)
-            )
-            requires_key = False  # CLI path doesn't require it
-        else:
-            mode = "cli"
-            configured = available
-            requires_key = False
-
+        configured = bool(secrets.get_api_key(provider.name))
+        # MiniMax is API-only — always requires a key, no CLI fallback.
         out.append({
             "name": provider.name,
             "supportsVision": provider.supports_vision,
             "available": available,
             "configured": configured,
-            "requiresKey": requires_key,
-            "mode": mode,
+            "requiresKey": True,
+            "mode": "api" if configured else "none",
         })
     return out
 
@@ -110,19 +88,14 @@ async def list_providers() -> list[dict]:
 
 @router.put("/providers/{name}")
 async def set_provider_key(name: str, body: _ApiKeyBody) -> dict:
-    """Save (or clear, when `apiKey: null`) a provider's API key.
+    """Save (or clear, when `apiKey: null`) the MiniMax API key.
 
-    Only OpenAI's API mode accepts keys (its CLI path doesn't need one).
-    Setting a key on a CLI-only provider is a 400 — the UI shouldn't
-    reach this endpoint for them in the first place, but defend in depth.
+    MiniMax is the only provider that accepts keys. Setting a key on an
+    unknown provider is a 404 — the UI shouldn't reach this endpoint
+    for other names, but defend in depth.
     """
     if name not in _VALID_PROVIDER_NAMES:
         raise HTTPException(status_code=404, detail=f"unknown provider {name!r}")
-    if name != "openai":
-        raise HTTPException(
-            status_code=400,
-            detail=f"{name} doesn't accept API keys; uses CLI auth instead",
-        )
     secrets.set_api_key(name, body.apiKey)
     # Bust the relevant provider's availability cache so the next /providers
     # poll reflects the change immediately rather than waiting up to 60s.
@@ -150,21 +123,16 @@ async def test_provider(name: str) -> dict:
     if provider is None:
         raise HTTPException(status_code=404, detail=f"provider {name!r} not registered")
     if not await provider.is_available():
-        return {"ok": False, "error": "provider not configured"}
+        return {"ok": False, "error": "API key not configured"}
 
     started = time.monotonic()
     try:
-        # Single-character prompt to keep cost minimal. We do NOT pass
-        # max_tokens because some providers (Claude CLI) ignore it; we
-        # accept the small overage as a one-shot cost.
-        # Timeout aligned with the slowest production feature ceiling
-        # (auto_prompt_batch + vision both at 120s). The test endpoint
-        # used to time out at 30s while Vision dispatches succeeded
-        # because the Test path was tighter than what the user actually
-        # runs. 120s keeps Test honest — if Vision passes here, it'll
-        # pass at dispatch time too.
-        # Gemini retries with exponential backoff on quota exhaustion (429),
-        # so it uses 180s to account for multiple retries.
+        # Single-character prompt to keep cost minimal. Timeout aligned
+        # with the slowest production feature ceiling (auto_prompt +
+        # vision both at 120s). The Test path used to time out at 30s
+        # while Vision dispatches succeeded because the test path was
+        # tighter than what the user actually runs — 120s keeps Test
+        # honest.
         test_timeout = getattr(provider, "test_timeout_secs", 120.0)
         await provider.run(".", timeout=test_timeout)
     except LLMError as exc:
@@ -187,9 +155,9 @@ def get_config() -> dict:
 
     Per-feature values are ``str | null`` — null means the user hasn't
     pinned a provider for that feature yet. ``configured`` is True only
-    when all three features are pinned at the same provider (single-
-    provider UI invariant); the frontend uses this to gate the forced
-    AI Provider setup dialog on first run.
+    when all three features are pinned AND all three point at the same
+    provider (single-provider UI invariant); the frontend uses this to
+    gate the forced AI Provider setup dialog on first run.
     """
     saved = secrets.read_active_providers()
     out: dict = {f: saved.get(f) for f in _VALID_FEATURES}

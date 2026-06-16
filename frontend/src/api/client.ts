@@ -19,27 +19,26 @@ function humanizeBackendError(token: string): string | null {
   const t = token.toLowerCase();
   if (t === "paygate_tier_unknown") {
     return (
-      "Flowboard doesn't know your Google Flow plan tier yet — the "
-      + "extension hasn't seen a Flow request that exposes it. Open "
-      + "https://labs.google/fx/tools/flow in a tab and reload it once, "
-      + "then retry. Flowboard refuses to dispatch in this state to "
-      + "avoid silently serving Ultra users at the Pro checkpoint."
+      "Flowboard chưa biết gói Google Flow của bạn — tiện ích "
+      + "chưa thấy request Flow nào để lấy tier. Mở "
+      + "https://labs.google/fx/tools/flow trong một tab rồi tải lại một lần, "
+      + "sau đó thử lại. Flowboard từ chối dispatch trong trạng thái này "
+      + "để tránh phục vụ Ultra user ở checkpoint Pro mà không báo trước."
     );
   }
   if (t === "no_media_id_in_upload_response") {
     return (
-      "Google Flow accepted the upload but didn't return a media handle — "
-      + "this usually means the image was silently rejected by Flow's "
-      + "content filter (logos, watermarks, copyrighted brand imagery). "
-      + "Try a different image or download it locally and upload as a file. "
-      + "Check the agent terminal for the full Flow response."
+      "Google Flow đã nhận upload nhưng không trả về media handle — "
+      + "thường nghĩa là ảnh bị bộ lọc nội dung của Flow từ chối âm thầm "
+      + "(logo, watermark, ảnh bản quyền). Thử ảnh khác hoặc tải về máy "
+      + "rồi upload dạng file. Xem terminal của agent để có response đầy đủ từ Flow."
     );
   }
   if (t.includes("captcha_failed: no current window")) {
     return (
-      "Chrome has no open windows for the extension to attach a Flow tab to. "
-      + "Open any Chrome window (or click the extension's '⋯ → Open Flow') "
-      + "and retry — Flowboard will reuse the existing window automatically."
+      "Chrome không có cửa sổ nào đang mở để tiện ích gắn tab Flow vào. "
+      + "Mở bất kỳ cửa sổ Chrome nào (hoặc bấm '⋯ → Open Flow' trên tiện ích) "
+      + "rồi thử lại — Flowboard sẽ tự dùng lại cửa sổ đang có."
     );
   }
   if (t.startsWith("captcha_failed:")) {
@@ -50,7 +49,7 @@ function humanizeBackendError(token: string): string | null {
   if (t.startsWith("public_error_")) {
     // Veo / Imagen content filters are returned verbatim by Flow — these
     // are already self-describing, just prettify the prefix.
-    return token.replace(/^PUBLIC_ERROR_/i, "Flow rejected: ").replace(/_/g, " ");
+    return token.replace(/^PUBLIC_ERROR_/i, "Flow từ chối: ").replace(/_/g, " ");
   }
   return null;
 }
@@ -572,10 +571,12 @@ export async function uploadImageFromUrl(
 
 
 // ── LLM provider Settings ─────────────────────────────────────────────────
-// See .omc/plans/multi-llm-provider-legacy.md → UI Specification → Frontend ↔
-// backend contract for the full shape.
+// MiniMax-only build: there's a single LLM provider (MiniMax) in this
+// frontend/backend pair. The earlier multi-provider design (Claude /
+// Gemini / OpenAI Codex) was dropped — the cloud-VPS image doesn't
+// bundle any of those CLIs. Backend route: /api/llm/*.
 
-export type LLMProviderName = "claude" | "gemini" | "openai";
+export type LLMProviderName = "minimax";
 export type LLMFeature = "auto_prompt" | "vision" | "planner";
 export type LLMProviderMode = "cli" | "api" | "none";
 export type LLMLastError =
@@ -703,11 +704,16 @@ export async function getActivityList(opts?: {
   limit?: number;
   beforeId?: number;
   type?: string[];
+  // Comma-separated status filter (e.g. "queued,running") — the route
+  // whitelists values, so a typo surfaces as a 422 instead of an empty
+  // list (used by rehydrateRunningPolls to find in-flight work on boot).
+  status?: string[];
 }): Promise<{ items: ActivityListItem[]; next_before_id: number | null }> {
   const search = new URLSearchParams();
   if (opts?.limit) search.set("limit", String(opts.limit));
   if (opts?.beforeId) search.set("before_id", String(opts.beforeId));
   if (opts?.type && opts.type.length > 0) search.set("type", opts.type.join(","));
+  if (opts?.status && opts.status.length > 0) search.set("status", opts.status.join(","));
   const q = search.toString();
   const res = await fetch(`/api/activity${q ? `?${q}` : ""}`);
   if (!res.ok) throw new Error(`getActivityList: ${res.status}`);

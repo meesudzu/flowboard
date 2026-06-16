@@ -47,6 +47,7 @@ coverage/
 # Keep on disk; never commit.
 /video_model*.md
 
-# Service runtime (created by bin/flowboard install on macOS)
 **/.run.flowboard/
+
+# Runtime logs (created by bin/flowboard install)
 .flowboard/
