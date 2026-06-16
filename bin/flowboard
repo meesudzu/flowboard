@@ -3,7 +3,8 @@
 #
 # Usage:  flowboard {install|dev|start|stop|restart|status|logs|build|uninstall}
 #
-#   install    copy the plist to ~/Library/LaunchAgents and start it
+#   install    create venv on the system disk, install deps, build FE,
+#              generate plist with correct paths, then load the LaunchAgent
 #   dev        foreground mode with --reload (auto-restart on .py edits)
 #              Ctrl+C exits dev AND re-loads the service automatically
 #   start      load + run  (background)
@@ -20,6 +21,13 @@ PROJECT="/Volumes/FX900/personal/flowboard"
 PLIST_SRC="$PROJECT/scripts/${LABEL}.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/.flowboard/logs"
+# Venv lives on the SYSTEM disk (not inside the project tree). launchd's
+# sandbox can read existing files anywhere, but a freshly created .venv on
+# an external volume (/Volumes/...) is hit with EPERM during the very first
+# site-module bootstrap, so the venv python dies before uvicorn starts.
+# Keeping it under $HOME on the boot volume sidesteps the rule entirely.
+VENV_DIR="$HOME/.flowboard/agent-venv"
+HAS_UV="$(command -v uv 2>/dev/null || true)"
 
 red()   { printf "\033[31m%s\033[0m\n" "$*"; }
 green() { printf "\033[32m%s\033[0m\n" "$*"; }
@@ -29,11 +37,52 @@ is_loaded() {
   launchctl list 2>/dev/null | grep -q "$LABEL"
 }
 
+# Create the venv at $VENV_DIR and install project deps (editable + dev
+# extras). Idempotent: skips venv creation if it already exists; the pip
+# install always runs so adding/removing deps in pyproject.toml is picked up.
+create_venv() {
+  mkdir -p "$(dirname "$VENV_DIR")"
+  if [ ! -x "$VENV_DIR/bin/python" ]; then
+    blue "→ creating venv at $VENV_DIR"
+    if [ -n "$HAS_UV" ]; then
+      (cd "$PROJECT/agent" && uv venv "$VENV_DIR")
+    else
+      python3 -m venv "$VENV_DIR"
+    fi
+  else
+    blue "→ venv already exists at $VENV_DIR (skipping create)"
+  fi
+  blue "→ installing project deps (editable, with dev extras)"
+  if [ -n "$HAS_UV" ]; then
+    (cd "$PROJECT/agent" && uv pip install --python "$VENV_DIR/bin/python" -e ".[dev]")
+  else
+    (cd "$PROJECT/agent" && "$VENV_DIR/bin/pip" install -e ".[dev]")
+  fi
+}
+
+# Generate the LaunchAgent plist by substituting __VENV_PATH__ and
+# __WORKDIR__ placeholders in the template. The template in scripts/ stays
+# pristine; only the per-user copy in ~/Library/LaunchAgents/ gets the
+# actual paths. Re-running install is safe — it just overwrites the copy.
+generate_plist() {
+  mkdir -p "$(dirname "$PLIST_DST")"
+  # Substitute __VENV_PATH__ / __WORKDIR__ in the XML template, then convert
+  # to binary1 before install. launchd in this env returns EIO on xml1 plists
+  # (seen on fresh install with the templated multi-line format), and binary1
+  # is faster to parse anyway.
+  sed -e "s|__VENV_PATH__|$VENV_DIR|g" \
+      -e "s|__WORKDIR__|$PROJECT/agent|g" \
+      "$PLIST_SRC" \
+    | plutil -convert binary1 -o "$PLIST_DST" -
+}
+
 cmd="${1:-help}"
 case "$cmd" in
   install)
     [ -f "$PLIST_SRC" ] || { red "missing $PLIST_SRC"; exit 1; }
-    mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
+    mkdir -p "$LOG_DIR"
+
+    create_venv
 
     # Build frontend if dist/ is missing (first install or after fresh clone).
     if [ ! -d "$PROJECT/frontend/dist" ]; then
@@ -47,10 +96,11 @@ case "$cmd" in
       launchctl unload "$PLIST_DST" 2>/dev/null || true
     fi
 
-    cp "$PLIST_SRC" "$PLIST_DST"
+    generate_plist
     launchctl load -w "$PLIST_DST"
     green "✓ installed and started"
     blue  "  → http://localhost:8101"
+    blue  "  → venv: $VENV_DIR"
     blue  "  → logs: $LOG_DIR"
     blue  "  → flowboard status / logs / stop"
     ;;
@@ -103,6 +153,10 @@ case "$cmd" in
     # and restarts the worker on any .py change (~0.5s round-trip).
     # We temporarily unload the LaunchAgent to free :8101, and re-load it on
     # exit so the service is "always there" the moment you step away.
+    [ -x "$VENV_DIR/bin/uvicorn" ] || {
+      red "venv not found at $VENV_DIR — run: flowboard install"
+      exit 1
+    }
     if is_loaded; then
       blue "→ stopping service to free port 8101…"
       launchctl unload "$PLIST_DST" 2>/dev/null || true
@@ -125,13 +179,14 @@ case "$cmd" in
     trap cleanup EXIT INT TERM
 
     blue "→ uvicorn --reload (Ctrl+C to stop dev + auto-restart service)"
+    blue "  venv:    $VENV_DIR"
     blue "  watching: $PROJECT/agent/flowboard/**"
-    blue "  ignoring: .venv, __pycache__, ../storage"
+    blue "  ignoring: $VENV_DIR, __pycache__, ../storage"
     cd "$PROJECT/agent"
-    exec ./.venv/bin/uvicorn flowboard.main:app \
+    exec "$VENV_DIR/bin/uvicorn" flowboard.main:app \
       --host 127.0.0.1 --port 8101 --reload \
       --reload-dir flowboard \
-      --reload-exclude '.venv' \
+      --reload-exclude "$VENV_DIR" \
       --reload-exclude '__pycache__' \
       --reload-exclude '../storage'
     # exec replaces the shell, so cleanup() only runs on signal from outside

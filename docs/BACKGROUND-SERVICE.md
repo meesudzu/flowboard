@@ -60,7 +60,22 @@ service chạy nền cho gọn.
 ```
 /Volumes/FX900/personal/flowboard/
 ├── agent/
-│   ├── .venv/bin/uvicorn          # binary mà launchd gọi
+│
+│   (project files only — venv lives outside the tree, see below)
+│
+
+```
+
+> **Venv location:** the LaunchAgent runs the venv python from
+> `~/.flowboard/agent-venv/bin/uvicorn` (system disk), not from `agent/.venv`.
+> macOS launchd’s sandbox refuses to read `pyvenv.cfg` from a freshly
+> created venv on an external volume (`/Volumes/...`) with EPERM, so we
+> keep the venv on the boot volume. `bin/flowboard install` creates it
+> automatically; you don’t have to run `make install` first.
+
+```
+/Volumes/FX900/personal/flowboard/
+├── agent/
 │   └── flowboard/main.py          # +13 dòng mount StaticFiles ở cuối
 ├── frontend/
 │   └── dist/                      # build output (index.html + assets/)
@@ -144,7 +159,7 @@ http://localhost:8101
 ### Bước 5 — Kiểm tra trạng thái
 
 ```bash
-flowboard status
+bin/flowboard status
 ```
 
 Output mẫu khi chạy đúng:
@@ -169,14 +184,14 @@ tail (err):
 
 | Lệnh | Làm gì |
 |---|---|
-| `flowboard status` | Đang chạy không? + 5 dòng log cuối |
-| `flowboard logs` | `tail -f` cả stdout lẫn stderr (Ctrl+C để thoát) |
-| `flowboard start` | Load LaunchAgent (chỉ cần khi bị `stop` hoặc sau `uninstall`) |
-| `flowboard stop` | Unload LaunchAgent (process bị kill, port được giải phóng) |
-| `flowboard restart` | Unload rồi load lại — pick up code mới |
-| `flowboard build` | `npm run build` frontend, rồi nhắc `flowboard restart` |
-| `flowboard dev` | Foreground + `--reload`, Ctrl+C **tự load lại service** |
-| `flowboard uninstall` | Unload + xóa plist (code & data **không** bị đụng) |
+| `bin/flowboard status` | Đang chạy không? + 5 dòng log cuối |
+| `bin/flowboard logs` | `tail -f` cả stdout lẫn stderr (Ctrl+C để thoát) |
+| `bin/flowboard start` | Load LaunchAgent (chỉ cần khi bị `stop` hoặc sau `uninstall`) |
+| `bin/flowboard stop` | Unload LaunchAgent (process bị kill, port được giải phóng) |
+| `bin/flowboard restart` | Unload rồi load lại — pick up code mới |
+| `bin/flowboard build` | `npm run build` frontend, rồi nhắc `bin/flowboard restart` |
+| `bin/flowboard dev` | Foreground + `--reload`, Ctrl+C **tự load lại service** |
+| `bin/flowboard uninstall` | Unload + xóa plist (code & data **không** bị đụng) |
 
 ### 4.2. Lifecycle khi login / logout macOS
 
@@ -206,10 +221,10 @@ Có hai mode dev. Chọn theo việc bạn đang sửa:
 
 ### 5.1. Sửa `agent/flowboard/**/*.py` (backend)
 
-Dùng **`flowboard dev`** (tương đương `make dev-loopback`):
+Dùng **`bin/flowboard dev`** (tương đương `make dev-loopback`):
 
 ```bash
-flowboard dev
+bin/flowboard dev
 # → stopping service to free port 8101…
 # → uvicorn --reload (Ctrl+C to stop dev + auto-restart service)
 #   watching: /Volumes/FX900/personal/flowboard/agent/flowboard/**
@@ -247,8 +262,8 @@ Mở `http://localhost:5173` (Vite) — Vite proxy `/api`, `/media`, `/ws` →
 **(b) Sửa xong, muốn ship vào static dist:**
 
 ```bash
-flowboard build           # npm run build
-flowboard restart         # pick up dist/ mới
+bin/flowboard build           # npm run build
+bin/flowboard restart         # pick up dist/ mới
 ```
 
 Mở `http://localhost:8101` — sẽ thấy UI mới.
@@ -259,18 +274,18 @@ Extension chạy độc lập với service:
 
 1. Sửa file trong `extension/`.
 2. Mở `chrome://extensions` → tìm "Flowboard Bridge" → bấm **↻ reload**.
-3. Test ngay. Không cần `flowboard restart`.
+3. Test ngay. Không cần `bin/flowboard restart`.
 
 ### 5.4. Thêm / sửa pip dependency
 
 ```bash
 cd /Volumes/FX900/personal/flowboard/agent
-# Sửa pyproject.toml hoặc: uv pip install --python .venv/bin/python <pkg>
+# Sửa pyproject.toml hoặc: uv pip install --python ~/.flowboard/agent-venv/bin/python <pkg>
 make update               # hoặc: uv pip install -U -e .
-flowboard restart
+bin/flowboard restart
 ```
 
-**Không** dùng `flowboard dev` cho bước này — `--reload` không watch
+**Không** dùng `bin/flowboard dev` cho bước này — `--reload` không watch
 `pyproject.toml`, và worker sẽ crash vì thiếu module. Restart sạch sẽ
 hơn.
 
@@ -278,17 +293,17 @@ hơn.
 
 | Đang sửa | Mode | Browser mở |
 |---|---|---|
-| `agent/**/*.py` (lặp lại nhiều) | `flowboard dev` | `:8101` (FE serve từ dist cũ) |
+| `agent/**/*.py` (lặp lại nhiều) | `bin/flowboard dev` | `:8101` (FE serve từ dist cũ) |
 | `frontend/src/**` | `npm run dev` ở terminal 2 | `:5173` (Vite HMR) |
 | `extension/*.js` | Sửa → reload extension | tab Flow + bất kỳ |
-| `agent/pyproject.toml` | `make update` + `flowboard restart` | `:8101` |
-| Xong hết, đi ngủ | `flowboard restart` (nếu cần) | `:8101` |
+| `agent/pyproject.toml` | `make update` + `bin/flowboard restart` | `:8101` |
+| Xong hết, đi ngủ | `bin/flowboard restart` (nếu cần) | `:8101` |
 
 ---
 
 ## 6. Troubleshooting
 
-### 6.1. `flowboard status` báo "not running"
+### 6.1. `bin/flowboard status` báo "not running"
 
 Xem log trước:
 
@@ -301,9 +316,10 @@ Các lỗi thường gặp:
 | Dòng đầu của err.log | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | `ModuleNotFoundError: flowboard` | Sai WorkingDirectory trong plist | Kiểm tra plist có `WorkingDirectory = /Volumes/FX900/personal/flowboard/agent` |
-| `Permission denied: .../uvicorn` | `.venv` chưa được cấp quyền exec | `chmod +x agent/.venv/bin/uvicorn` |
+| `Permission denied: .../uvicorn` | `.venv` chưa được cấp quyền exec | `chmod +x ~/.flowboard/agent-venv/bin/uvicorn` |
+| `PermissionError: …/.venv/pyvenv.cfg` (EPERM) trên ổ ngoài | launchd sandbox từ chối đọc pyvenv.cfg của venv mới tạo trên `/Volumes/...` | Chạy lại `bin/flowboard install` — nó dời venv về `~/.flowboard/agent-venv` (system disk) |
 | `Address already in use` | Có process khác đang giữ :8101 | `lsof -iTCP:8101` rồi `kill` |
-| `sqlite3.OperationalError: database is locked` | Hai instance cùng mở DB | `flowboard stop` rồi `start`, kiểm tra còn instance nào khác không |
+| `sqlite3.OperationalError: database is locked` | Hai instance cùng mở DB | `bin/flowboard stop` rồi `start`, kiểm tra còn instance nào khác không |
 | `FLOWBOARD_WS_HOST must be loopback` | Ai đó set env `FLOWBOARD_WS_HOST` sang LAN IP | Unset env var, đây là **guard rail cố ý** |
 
 ### 6.2. Mở `http://localhost:8101` thấy 404
@@ -313,17 +329,17 @@ Các lỗi thường gặp:
 ```bash
 ls /Volumes/FX900/personal/flowboard/frontend/dist/
 # Trống → build lại:
-flowboard build
+bin/flowboard build
 # Không có thư mục dist/ → build:
 make frontend-build
-flowboard restart
+bin/flowboard restart
 ```
 
 ### 6.3. Extension không connect được WS :9223
 
 1. Mở popup extension (click icon "Flowboard Bridge" trên thanh Chrome)
    xem status indicator.
-2. Nếu status = **off**: service chưa chạy → `flowboard start`.
+2. Nếu status = **off**: service chưa chạy → `bin/flowboard start`.
 3. Nếu status = **idle** nhưng Generation vẫn fail: mở
    `chrome://extensions` → reload extension.
 4. Nếu vẫn không được: bạn đã logout khỏi `labs.google` → đăng nhập lại
@@ -342,10 +358,10 @@ Lần đầu bind port macOS sẽ popup. Nếu bạn bấm "Don't Allow":
 ở top-level của `main.py`, cần full restart:
 
 ```bash
-flowboard restart
+bin/flowboard restart
 ```
 
-Hoặc thoát `flowboard dev` rồi chạy lại.
+Hoặc thoát `bin/flowboard dev` rồi chạy lại.
 
 ### 6.6. Logs phình to
 
@@ -356,7 +372,7 @@ Hoặc thoát `flowboard dev` rồi chạy lại.
 : > ~/.flowboard/logs/agent.out.log
 : > ~/.flowboard/logs/agent.err.log
 # Sau đó
-flowboard restart
+bin/flowboard restart
 ```
 
 (Tự động rotate có thể thêm bằng cách đổi path trong plist sang
@@ -370,7 +386,7 @@ vài tháng 1 lần là đủ.)
 Sạch sẽ, không đụng data:
 
 ```bash
-flowboard uninstall   # unload + xóa plist
+bin/flowboard uninstall   # unload + xóa plist
 ```
 
 Hoặc thủ công:
@@ -383,7 +399,7 @@ rm ~/Library/LaunchAgents/com.flowboard.agent.plist
 Sau đó nếu muốn quay lại dev mode cũ, dùng bình thường:
 
 ```bash
-make agent       # foreground, port 8101
+make agent       # foreground, port 8101 (uses ~/.flowboard/agent-venv)
 make frontend    # foreground, port 5173
 ```
 

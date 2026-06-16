@@ -3,10 +3,14 @@
 # Prefer uv (https://github.com/astral-sh/uv) — ~10× faster than pip.
 # Falls back to stdlib venv + pip when uv is not installed.
 HAS_UV := $(shell command -v uv 2>/dev/null)
+# venv lives on the system disk so launchd can spawn it without hitting
+# macOS sandbox EPERM on fresh files written to external volumes. Override
+# with: make install VENV=/some/other/path
+VENV ?= $(HOME)/.flowboard/agent-venv
 
 help:
 	@echo "Flowboard dev commands:"
-	@echo "  make install      - install runtime deps (agent + frontend)"
+	@echo "  make install      - install runtime deps (agent + frontend). venv at $(VENV)"
 	@echo "  make install-dev  - install agent with dev extras (ruff, pytest)"
 	@echo "  make update       - upgrade existing deps (agent + frontend)"
 	@echo "  make dev          - hint: run agent + frontend in separate terminals"
@@ -17,25 +21,25 @@ help:
 
 install:
 ifdef HAS_UV
-	cd agent && uv venv && uv pip install --python .venv/bin/python -e .
+	cd agent && uv venv $(VENV) && uv pip install --python $(VENV)/bin/python -e .
 else
-	cd agent && python -m venv .venv && .venv/bin/pip install -e .
+	cd agent && python -m venv $(VENV) && $(VENV)/bin/pip install -e .
 endif
 	cd frontend && npm install
 
 install-dev:
 ifdef HAS_UV
-	cd agent && uv venv && uv pip install --python .venv/bin/python -e ".[dev]"
+	cd agent && uv venv $(VENV) && uv pip install --python $(VENV)/bin/python -e ".[dev]"
 else
-	cd agent && python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+	cd agent && python -m venv $(VENV) && $(VENV)/bin/pip install -e ".[dev]"
 endif
 	cd frontend && npm install
 
 update:
 ifdef HAS_UV
-	cd agent && uv pip install --python .venv/bin/python -U -e .
+	cd agent && uv pip install --python $(VENV)/bin/python -U -e .
 else
-	cd agent && .venv/bin/pip install -U -e .
+	cd agent && $(VENV)/bin/pip install -U -e .
 endif
 	cd frontend && npm update
 
@@ -62,13 +66,13 @@ dev-parallel:
 	@echo "Then visit http://localhost:5173 (Vite proxies /api -> :8101).
 
 agent:
-	cd agent && .venv/bin/uvicorn flowboard.main:app --reload --port 8101
+	cd agent && $(VENV)/bin/uvicorn flowboard.main:app --reload --port 8101
 
 frontend:
 	cd frontend && npm run dev
 
 clean:
-	rm -rf agent/.venv agent/**/__pycache__ frontend/node_modules frontend/dist
+	rm -rf $(VENV) agent/.venv agent/**/__pycache__ frontend/node_modules frontend/dist
 
 # ── Background service (macOS launchd) ─────────────────────────────────────
 # Builds the frontend, then installs + starts a per-user LaunchAgent that

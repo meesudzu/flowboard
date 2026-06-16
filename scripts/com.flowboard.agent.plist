@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
+<!--
+  TEMPLATE — paths marked __VENV_PATH__ and __WORKDIR__ are substituted by
+  `bin/flowboard install` (see generate_plist() inside that script). The
+  per-user copy in ~/Library/LaunchAgents/com.flowboard.agent.plist gets
+  regenerated on every install; do not edit it by hand.
+-->
 <dict>
     <key>Label</key>
     <string>com.flowboard.agent</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Volumes/FX900/personal/flowboard/agent/.venv/bin/uvicorn</string>
+        <string>__VENV_PATH__/bin/uvicorn</string>
         <string>flowboard.main:app</string>
         <string>--host</string>
         <string>127.0.0.1</string>
@@ -21,12 +26,12 @@
          resolves ROOT from __file__ and defaults storage/ to <project>/storage,
          so the SQLite file stays where the rest of the project expects it. -->
     <key>WorkingDirectory</key>
-    <string>/Volumes/FX900/personal/flowboard/agent</string>
+    <string>__WORKDIR__</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Volumes/FX900/personal/flowboard/agent/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__VENV_PATH__/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>LANG</key>
         <string>en_US.UTF-8</string>
     </dict>
