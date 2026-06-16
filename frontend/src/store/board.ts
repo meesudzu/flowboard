@@ -88,6 +88,15 @@ export interface FlowboardNodeData extends Record<string, unknown> {
   charVibe?: string;
   charGender?: string;
   error?: string;
+  // Marker flags written by the store when it creates the node, so the
+  // DTO→FlowNode mapper can preserve a custom title (the reference
+  // panel's `ref.label`, the " (variant)" suffix on clones) instead of
+  // collapsing every node back to `TYPE_TITLE[type]`. Without these
+  // flags the chip-bar label and the node-card title drift apart the
+  // moment the user drags a reference or hits clone — see
+  // resolveNodeTitle below.
+  isReference?: boolean;
+  isClone?: boolean;
   // Storyboard layout. The Storyboard node is now a thin image-node
   // wrapper that generates a single composite using a locked prompt
   // template `Create visual storyboard for "<topic>" as SINGLE IMAGE
@@ -95,6 +104,75 @@ export interface FlowboardNodeData extends Record<string, unknown> {
   // missing (true for fresh nodes + legacy pre-1.2.15 nodes whose
   // multi-shot data is now ignored).
   storyboardGrid?: StoryboardGrid;
+}
+
+/**
+ * Single source of truth for "what title should this node display?".
+ *
+ * Old behaviour read `dto.data["title"]` and only fell back to
+ * `TYPE_TITLE[type]` when the DB field was missing — which meant every
+ * node created before the chip-bar labels were translated into
+ * Vietnamese (Nhân vật, Ảnh, Sản phẩm, Ghi chú) kept showing the legacy
+ * English defaults ("Character", "Image", "Visual asset", ...) and the
+ * "+" chip bar and the node card disagreed about what the node was
+ * called.
+ *
+ * Now we ALWAYS display `TYPE_TITLE[type]` so the chip bar and the card
+ * can never drift apart again, with two explicit exceptions:
+ *
+ *   - `isReference` → dragged from the References panel with a custom
+ *     `ref.label`; show that label so the user can still tell their
+ *     "Logo_final_v3" reference apart from a fresh "Sản phẩm" node.
+ *   - `isClone`     → produced by clone-with-upstream; the title carries
+ *     a " (variant)" suffix and would read awkwardly without it
+ *     ("Ảnh (variant)" is meaningfully different from "Ảnh").
+ *
+ * The flags are set by the store at create-time and round-trip through
+ * `data` so a reload after refresh / switch-board still classifies the
+ * node correctly. If neither flag is set we always win with the chip
+ * bar label — which also lets us silently migrate legacy English-titled
+ * nodes: no DB migration needed, the next load just rewrites the title
+ * from `TYPE_TITLE[type]`.
+ */
+function resolveNodeTitle(
+  type: NodeType,
+  storedTitle: unknown,
+  flags: { isReference?: boolean; isClone?: boolean } = {},
+): string {
+  if (flags.isReference || flags.isClone) {
+    if (typeof storedTitle === "string" && storedTitle.length > 0) {
+      return storedTitle;
+    }
+  }
+  // Legacy-clone rescue: clones created before we started persisting
+  // `isClone: true` had a plain "X (variant)" title in the DB and no
+  // flag to lean on. The suffix is the only signal that this node was
+  // a clone-with-upstream, so re-derive it from the stored title
+  // instead of silently stripping it. New clones always have the flag
+  // and hit the branch above, so this is purely a back-compat path.
+  if (
+    typeof storedTitle === "string"
+    && storedTitle.trimEnd().endsWith("(variant)")
+  ) {
+    const base = storedTitle.trimEnd().slice(0, -" (variant)".length);
+    // Only treat as a clone if the prefix already matches the chip-bar
+    // label (either the new Vietnamese one OR the legacy English one,
+    // so users mid-migration don't see their suffix vanish). If the
+    // prefix is something custom, keep the stored title as-is.
+    const legacyEnglish: Record<NodeType, string> = {
+      character: "Character",
+      image: "Image",
+      video: "Video",
+      prompt: "Prompt",
+      note: "Note",
+      visual_asset: "Visual asset",
+      Storyboard: "Storyboard",
+    };
+    if (base === TYPE_TITLE[type] || base === legacyEnglish[type]) {
+      return `${TYPE_TITLE[type]} (variant)`;
+    }
+  }
+  return TYPE_TITLE[type];
 }
 
 export type FlowNode = Node<FlowboardNodeData>;
@@ -257,7 +335,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         data: {
           type: n.type,
           shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
+          title: resolveNodeTitle(n.type, n.data["title"], {
+            isReference: n.data["isReference"] as boolean | undefined,
+            isClone: n.data["isClone"] as boolean | undefined,
+          }),
           status: n.status,
           prompt: n.data["prompt"] as string | undefined,
           thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
@@ -313,7 +394,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         data: {
           type: n.type,
           shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
+          title: resolveNodeTitle(n.type, n.data["title"], {
+            isReference: n.data["isReference"] as boolean | undefined,
+            isClone: n.data["isClone"] as boolean | undefined,
+          }),
           status: n.status,
           prompt: n.data["prompt"] as string | undefined,
           thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
@@ -397,7 +481,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         data: {
           type: n.type,
           shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
+          title: resolveNodeTitle(n.type, n.data["title"], {
+            isReference: n.data["isReference"] as boolean | undefined,
+            isClone: n.data["isClone"] as boolean | undefined,
+          }),
           status: n.status,
           prompt: n.data["prompt"] as string | undefined,
           thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
@@ -457,7 +544,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         data: {
           type: dto.type,
           shortId: dto.short_id,
-          title: (dto.data["title"] as string | undefined) ?? title,
+          title: resolveNodeTitle(dto.type, dto.data["title"], {
+            isReference: dto.data["isReference"] as boolean | undefined,
+            isClone: dto.data["isClone"] as boolean | undefined,
+          }),
           status: dto.status,
         },
       };
@@ -485,6 +575,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         y: Math.round(position.y),
         data: {
           title,
+          // Persisted so reload-after-refresh keeps the custom label
+          // instead of falling back to `TYPE_TITLE["visual_asset"]`
+          // = "Sản phẩm". See `isReference` handling in
+          // resolveNodeTitle.
+          isReference: true,
           mediaId: ref.mediaId,
           aiBrief: ref.aiBrief ?? undefined,
           aspectRatio: ref.aspectRatio ?? undefined,
@@ -502,7 +597,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         data: {
           type: dto.type,
           shortId: dto.short_id,
+          // Reference nodes keep their `ref.label` even though the
+          // default `TYPE_TITLE[type]` is now Vietnamese — the user
+          // explicitly named this asset in the References panel and
+          // "Sản phẩm" loses that information. `isReference: true` is
+          // the marker `resolveNodeTitle` looks for to skip the
+          // chip-bar label.
           title: (dto.data["title"] as string | undefined) ?? title,
+          isReference: true,
           status: "done",
           mediaId: ref.mediaId,
           aiBrief: ref.aiBrief ?? undefined,
@@ -599,7 +701,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         type: src.data.type,
         x: newPos.x,
         y: newPos.y,
-        data: { title: newTitle },
+        data: { title: newTitle, isClone: true },
       });
     } catch {
       return null;
@@ -612,6 +714,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       data: {
         type: nodeDto.type,
         shortId: nodeDto.short_id,
+        // isClone is persisted so the load path can re-derive the
+        // " (variant)" suffix if the user refreshes — otherwise the
+        // suffix falls off and the clone becomes indistinguishable
+        // from its source.
+        isClone: true,
         title: (nodeDto.data["title"] as string | undefined) ?? newTitle,
         status: nodeDto.status,
       },
