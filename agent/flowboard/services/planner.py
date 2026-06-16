@@ -6,17 +6,18 @@ Two paths:
   configured Planner provider is unavailable or when
   ``FLOWBOARD_PLANNER_BACKEND=mock``.
 - ``generate_plan_reply`` — invokes the configured Planner provider via
-  ``run_llm("planner", ...)`` (default = Claude CLI; user can pin Gemini /
-  OpenAI Codex in Settings → AI Providers). Asks it to produce a
-  conversational acknowledgement and (optionally) a JSON pipeline plan
-  matching the schema in ``docs/PLAN.md``.
+  ``run_llm("planner", ...)`` (MiniMax-only build: routes through
+  ``MiniMaxProvider`` using the M2.7-highspeed model). Asks it to
+  produce a conversational acknowledgement and (optionally) a JSON
+  pipeline plan matching the schema in ``docs/PLAN.md``.
 
 The backend is chosen at dispatch time by ``FLOWBOARD_PLANNER_BACKEND``
-(``cli|mock|auto``, default ``auto``). Post-multi-LLM, the env var name
-is historical — "cli" now means "use the configured provider" and "auto"
-means "use the configured provider if available, else mock". The mode
-matters because dev / test environments without any LLM available need
-the mock fallback to keep working.
+(``real|mock|auto``, default ``auto``). Post-CLI-removal, the env var
+name ``cli`` is kept as a deprecated alias for ``real`` — old scripts
+and dev environments still using it keep working. ``auto`` means
+"use MiniMax if the API key is configured, else mock". The mock
+fallback exists so dev / CI environments without any API key can
+keep the chat pipeline working.
 """
 from __future__ import annotations
 
@@ -130,8 +131,8 @@ def generate_mock_reply(
             "Could not find: " + ", ".join(f"#{m}" for m in missing) + "."
         )
     sentences.append(
-        "Planner stub — set FLOWBOARD_PLANNER_BACKEND=cli (or use auto with the "
-        "claude CLI on PATH) to enable real planning."
+        "Planner stub — set FLOWBOARD_PLANNER_BACKEND=real (or use auto with the "
+        "MiniMax API key configured) to enable real planning."
     )
     return " ".join(sentences)
 
@@ -204,17 +205,24 @@ async def generate_plan_reply(
 
     Honors ``FLOWBOARD_PLANNER_BACKEND``:
     - ``mock`` → always use the deterministic mock (plan is None).
-    - ``cli``  → require the configured Planner provider; surface the
-      error in reply_text on failure.
-    - ``auto`` → try the configured Planner provider, fall back to mock
-      on unavailable / error.
+    - ``real`` → require the configured Planner provider (MiniMax); surface
+      the error in reply_text on failure. ``cli`` is a deprecated alias
+      for ``real`` — kept so older scripts keep working.
+    - ``auto`` → try MiniMax if the API key is configured, fall back to
+      mock on unavailable / error.
 
-    The auto-fallback respects the user's Settings pin: if they picked
-    ``planner = gemini`` and Gemini CLI isn't installed, we fall back to
-    mock (not Claude). Picking the right provider but having it down still
-    means "the user's chosen LLM is unavailable" — mock is the right fallback.
+    The auto-fallback respects the user's Settings pin: in this build
+    the only pin available is ``planner = minimax``. If the key isn't
+    set we fall back to mock. Picking the right provider but having it
+    down still means "the user's chosen LLM is unavailable" — mock is
+    the right fallback.
     """
     backend = (PLANNER_BACKEND or "auto").lower()
+    # ``cli`` is a deprecated alias for ``real`` — kept so older scripts
+    # and dev environments (which set FLOWBOARD_PLANNER_BACKEND=cli) keep
+    # working through the MiniMax-only refactor.
+    if backend == "cli":
+        backend = "real"
 
     if backend == "mock":
         return {
@@ -282,7 +290,7 @@ async def generate_plan_reply(
             activity.set_result({"raw_length": len(raw) if isinstance(raw, str) else 0})
     except LLMError as exc:
         logger.warning("planner: provider failed (%s), falling back to mock", exc)
-        if backend == "cli":
+        if backend == "real":
             return {
                 "reply_text": f"(planner unavailable: {exc})",
                 "plan": None,

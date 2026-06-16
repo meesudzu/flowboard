@@ -81,15 +81,16 @@ def _board(client, name="T"):
     return client.post("/api/boards", json={"name": name}).json()
 
 
-def _claude_provider():
+def _minimax_provider():
     """Resolve the default Planner provider singleton from the registry —
-    every test needs it to control the is_available probe."""
-    return registry.get_provider("claude")
+    every test needs it to control the is_available probe. MiniMax-only
+    build: the only registered provider is ``minimax``."""
+    return registry.get_provider("minimax")
 
 
 @pytest.mark.asyncio
 async def test_generate_plan_reply_uses_provider_when_available(client):
-    """Backend=cli: skip the auto-mode availability check, dispatch
+    """Backend=real (was 'cli'): skip the auto-mode availability check, dispatch
     directly. Provider returns a fenced JSON block, planner extracts the
     plan + conversational text."""
     b = _board(client)
@@ -121,7 +122,7 @@ async def test_generate_plan_reply_falls_back_to_mock_when_provider_unavailable(
     before building prompt context and return mock reply."""
     b = _board(client)
     with patch("flowboard.services.planner.PLANNER_BACKEND", "auto"), \
-         patch.object(_claude_provider(), "is_available", return_value=False):
+         patch.object(_minimax_provider(), "is_available", return_value=False):
         from flowboard.db import get_session
 
         with get_session() as s:
@@ -139,7 +140,7 @@ async def test_generate_plan_reply_handles_provider_error_with_mock_fallback(cli
     contract is what the migrated planner catches now."""
     b = _board(client)
     with patch("flowboard.services.planner.PLANNER_BACKEND", "auto"), \
-         patch.object(_claude_provider(), "is_available", return_value=True), \
+         patch.object(_minimax_provider(), "is_available", return_value=True), \
          patch(
              "flowboard.services.planner.run_llm",
              new=AsyncMock(side_effect=LLMError("timeout")),
@@ -187,7 +188,7 @@ async def test_generate_plan_reply_mock_mode_skips_provider_entirely(client):
     is_available_mock = AsyncMock(return_value=True)
     run_llm_mock = AsyncMock(return_value="should not be called")
     with patch("flowboard.services.planner.PLANNER_BACKEND", "mock"), \
-         patch.object(_claude_provider(), "is_available", new=is_available_mock), \
+         patch.object(_minimax_provider(), "is_available", new=is_available_mock), \
          patch("flowboard.services.planner.run_llm", new=run_llm_mock):
         from flowboard.db import get_session
 
@@ -205,22 +206,21 @@ async def test_generate_plan_reply_mock_mode_skips_provider_entirely(client):
 async def test_generate_plan_reply_auto_respects_user_picked_provider(
     client, tmp_path, monkeypatch
 ):
-    """User pinned planner=gemini in Settings — auto mode probes Gemini's
-    availability (not Claude's). Gemini unavailable → mock fallback even
-    if Claude is available. Confirms the migration's promise that the
-    'auto' fallback respects the user's pin instead of Claude-everywhere.
+    """User pinned planner=minimax in Settings — auto mode probes
+    MiniMax's availability. If MiniMax is unavailable (no API key),
+    auto mode falls back to mock even though the provider is the
+    only one registered. Confirms the 'auto' fallback respects the
+    user's pin.
 
     Isolated secrets path so we don't write to the user's
     ~/.flowboard/secrets.json from a test."""
     monkeypatch.setenv("FLOWBOARD_SECRETS_PATH", str(tmp_path / "secrets.json"))
     b = _board(client)
     from flowboard.services.llm import secrets
-    secrets.set_feature_provider("planner", "gemini")
-    gemini = registry.get_provider("gemini")
-    claude = _claude_provider()
+    secrets.set_feature_provider("planner", "minimax")
+    minimax = _minimax_provider()
     with patch("flowboard.services.planner.PLANNER_BACKEND", "auto"), \
-         patch.object(gemini, "is_available", return_value=False), \
-         patch.object(claude, "is_available", return_value=True):
+         patch.object(minimax, "is_available", return_value=False):
         from flowboard.db import get_session
 
         with get_session() as s:
