@@ -57,16 +57,16 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
   const alreadyExecuted = plan.status === "done" || plan.status === "running";
 
   let runLabel: string;
-  if (isThisPlanRunning) runLabel = activeRun?.status === "pending" ? "Queued…" : "Running…";
-  else if (plan.status === "done") runLabel = "Done";
-  else if (plan.status === "failed") runLabel = "Failed";
-  else runLabel = "Run";
+  if (isThisPlanRunning) runLabel = activeRun?.status === "pending" ? "Đang xếp hàng…" : "Đang chạy…";
+  else if (plan.status === "done") runLabel = "Xong";
+  else if (plan.status === "failed") runLabel = "Thất bại";
+  else runLabel = "Chạy";
 
   const disabled = isThisPlanRunning || otherPlanRunning || alreadyExecuted;
 
   return (
     <div className="plan-preview-card">
-      <div className="plan-preview-card__title">Pipeline proposed</div>
+      <div className="plan-preview-card__title">Pipeline đề xuất</div>
       <div className="plan-preview-card__sketch">
         {dots}
         {overflow > 0 && (
@@ -368,7 +368,7 @@ export function ChatSidebar() {
   return (
     <aside className="sidebar chat">
       <header className="chat__header">
-        <span className="chat__label">CHAT</span>
+        <span className="chat__label">TRÒ CHUYỆN</span>
         {boardName && (
           <>
             <span className="chat__scope-sep">&nbsp;·&nbsp;</span>

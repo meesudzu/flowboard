@@ -19,27 +19,26 @@ function humanizeBackendError(token: string): string | null {
   const t = token.toLowerCase();
   if (t === "paygate_tier_unknown") {
     return (
-      "Flowboard doesn't know your Google Flow plan tier yet — the "
-      + "extension hasn't seen a Flow request that exposes it. Open "
-      + "https://labs.google/fx/tools/flow in a tab and reload it once, "
-      + "then retry. Flowboard refuses to dispatch in this state to "
-      + "avoid silently serving Ultra users at the Pro checkpoint."
+      "Flowboard chưa biết gói Google Flow của bạn — tiện ích "
+      + "chưa thấy request Flow nào để lấy tier. Mở "
+      + "https://labs.google/fx/tools/flow trong một tab rồi tải lại một lần, "
+      + "sau đó thử lại. Flowboard từ chối dispatch trong trạng thái này "
+      + "để tránh phục vụ Ultra user ở checkpoint Pro mà không báo trước."
     );
   }
   if (t === "no_media_id_in_upload_response") {
     return (
-      "Google Flow accepted the upload but didn't return a media handle — "
-      + "this usually means the image was silently rejected by Flow's "
-      + "content filter (logos, watermarks, copyrighted brand imagery). "
-      + "Try a different image or download it locally and upload as a file. "
-      + "Check the agent terminal for the full Flow response."
+      "Google Flow đã nhận upload nhưng không trả về media handle — "
+      + "thường nghĩa là ảnh bị bộ lọc nội dung của Flow từ chối âm thầm "
+      + "(logo, watermark, ảnh bản quyền). Thử ảnh khác hoặc tải về máy "
+      + "rồi upload dạng file. Xem terminal của agent để có response đầy đủ từ Flow."
     );
   }
   if (t.includes("captcha_failed: no current window")) {
     return (
-      "Chrome has no open windows for the extension to attach a Flow tab to. "
-      + "Open any Chrome window (or click the extension's '⋯ → Open Flow') "
-      + "and retry — Flowboard will reuse the existing window automatically."
+      "Chrome không có cửa sổ nào đang mở để tiện ích gắn tab Flow vào. "
+      + "Mở bất kỳ cửa sổ Chrome nào (hoặc bấm '⋯ → Open Flow' trên tiện ích) "
+      + "rồi thử lại — Flowboard sẽ tự dùng lại cửa sổ đang có."
     );
   }
   if (t.startsWith("captcha_failed:")) {
@@ -50,7 +49,7 @@ function humanizeBackendError(token: string): string | null {
   if (t.startsWith("public_error_")) {
     // Veo / Imagen content filters are returned verbatim by Flow — these
     // are already self-describing, just prettify the prefix.
-    return token.replace(/^PUBLIC_ERROR_/i, "Flow rejected: ").replace(/_/g, " ");
+    return token.replace(/^PUBLIC_ERROR_/i, "Flow từ chối: ").replace(/_/g, " ");
   }
   return null;
 }

@@ -47,4 +47,7 @@ coverage/
 # Keep on disk; never commit.
 /video_model*.md
 
-**/.run
+**/.run.flowboard/
+
+# Runtime logs (created by bin/flowboard install)
+.flowboard/

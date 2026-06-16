@@ -147,7 +147,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     if (cached !== null) return cached;
     const boardId = useBoardStore.getState().boardId;
     if (boardId === null) {
-      set({ error: "no board loaded" });
+      set({ error: "chưa load bảng vẽ" });
       return null;
     }
     try {
@@ -183,7 +183,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     const knownTier = opts.paygateTier ?? get().paygateTier;
     if (!knownTier) {
       set({
-        error: "Open Flow once so the extension can detect your plan, then retry. (See the Tier-unknown banner in the bottom-left.)",
+        error: "Mở Flow một lần để tiện ích nhận diện gói của bạn, rồi thử lại. (Xem banner Tier-unknown ở góc dưới bên trái.)",
       });
       useBoardStore.getState().updateNodeData(rfId, {
         status: "error",
@@ -233,11 +233,11 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           if (ingredients.length === 0) {
             useBoardStore.getState().updateNodeData(rfId, {
               status: "error",
-              error: "no ingredients",
+              error: "chưa có nguyên liệu",
             });
             set({
               error:
-                "Omni Flash needs at least one ingredient (connect an upstream Character / Image / Visual asset).",
+                "Omni Flash cần ít nhất một nguyên liệu (kết nối một Character/Image/Visual asset phía trên).",
             });
             return;
           }
@@ -263,8 +263,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           const hasMulti =
             Array.isArray(opts.sourceMediaIds) && opts.sourceMediaIds.length > 0;
           if (!hasMulti && !opts.sourceMediaId) {
-            useBoardStore.getState().updateNodeData(rfId, { status: "error", error: "no source media" });
-            set({ error: "Veo i2v requires a source image (connect an upstream image node)" });
+            useBoardStore.getState().updateNodeData(rfId, { status: "error", error: "chưa có media nguồn" });
+            set({ error: "Veo i2v cần một ảnh nguồn (kết nối một ô ảnh phía trên)" });
             return;
           }
           const videoParams: Record<string, unknown> = {
@@ -318,8 +318,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         });
       }
     } catch (err) {
-      useBoardStore.getState().updateNodeData(rfId, { status: "error", error: err instanceof Error ? err.message : "request failed" });
-      set({ error: err instanceof Error ? err.message : "Generation failed" });
+      useBoardStore.getState().updateNodeData(rfId, { status: "error", error: err instanceof Error ? err.message : "yêu cầu thất bại" });
+      set({ error: err instanceof Error ? err.message : "Tạo thất bại" });
       return;
     }
 
@@ -346,7 +346,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     const node = useBoardStore.getState().nodes.find((n) => n.id === rfId);
     const sourceMediaId = node?.data.mediaId;
     if (!sourceMediaId) {
-      set({ error: "no source image to refine" });
+      set({ error: "chưa có ảnh nguồn để tinh chỉnh" });
       return;
     }
 
@@ -380,9 +380,9 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     } catch (err) {
       useBoardStore.getState().updateNodeData(rfId, {
         status: "error",
-        error: err instanceof Error ? err.message : "refine failed",
+        error: err instanceof Error ? err.message : "tinh chỉnh thất bại",
       });
-      set({ error: err instanceof Error ? err.message : "refine failed" });
+      set({ error: err instanceof Error ? err.message : "tinh chỉnh thất bại" });
       return;
     }
 

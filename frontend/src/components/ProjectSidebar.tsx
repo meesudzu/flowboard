@@ -108,7 +108,7 @@ export function ProjectSidebar() {
   }, [openMenuId]);
 
   function handleNew() {
-    setNewDialogName("Untitled");
+    setNewDialogName("Chưa đặt tên");
     setNewDialogOpen(true);
     setTimeout(() => newDialogInputRef.current?.select(), 30);
   }
@@ -121,7 +121,7 @@ export function ProjectSidebar() {
 
   async function commitNewDialog() {
     if (newDialogBusy) return;
-    const name = newDialogName.trim() || "Untitled";
+    const name = newDialogName.trim() || "Chưa đặt tên";
     setNewDialogBusy(true);
     try {
       await createNewBoard(name);
@@ -201,13 +201,13 @@ export function ProjectSidebar() {
   return (
     <aside className={`project-sidebar${collapsed ? " project-sidebar--collapsed" : ""}`}>
       <div className="project-sidebar__header">
-        {!collapsed && <span className="project-sidebar__title">Projects</span>}
+        {!collapsed && <span className="project-sidebar__title">Dự án</span>}
         <button
           type="button"
           className="project-sidebar__icon-btn"
           onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand" : "Collapse"}
+          aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"}
+          title={collapsed ? "Mở rộng" : "Thu gọn"}
         >
           {collapsed ? "›" : "‹"}
         </button>
@@ -220,15 +220,15 @@ export function ProjectSidebar() {
               className="project-sidebar__new"
               onClick={handleNew}
             >
-              <span aria-hidden="true">+</span> New project
+              <span aria-hidden="true">+</span> Dự án mới
             </button>
             <button
               type="button"
               className="project-sidebar__sync"
               onClick={handleSyncClick}
               disabled={syncing}
-              title="Push every local board up to Google Flow — creates a Flow project for any board that's missing one"
-              aria-label="Sync local boards up to Google Flow"
+              title="Đẩy mọi bảng vẽ local lên Google Flow — tạo Flow project cho bảng nào chưa có"
+              aria-label="Đồng bộ bảng vẽ local lên Google Flow"
             >
               {syncing ? "…" : "🔄"}
             </button>
@@ -284,11 +284,11 @@ export function ProjectSidebar() {
                             : b.name
                         }
                       >
-                        {b.name || "Untitled"}
+                        {b.name || "Chưa đặt tên"}
                         {isOrphan && (
                           <span
                             className="project-sidebar__orphan-badge"
-                            title="Flow project not found — rebind required"
+                            title="Không tìm thấy Flow project — cần rebind"
                             aria-label="orphan"
                           >
                             ⚠
@@ -311,14 +311,14 @@ export function ProjectSidebar() {
                             type="button"
                             onClick={() => startRename(b.id, b.name)}
                           >
-                            Rename
+                            Đổi tên
                           </button>
                           <button
                             type="button"
                             className="project-sidebar__menu-danger"
                             onClick={() => openDeleteConfirm(b.id, b.name)}
                           >
-                            Delete
+                            Xoá
                           </button>
                         </div>
                       )}
@@ -328,7 +328,7 @@ export function ProjectSidebar() {
               );
             })}
             {boards.length === 0 && (
-              <li className="project-sidebar__empty">No projects yet</li>
+              <li className="project-sidebar__empty">Chưa có dự án nào</li>
             )}
           </ul>
         </>
@@ -354,7 +354,7 @@ export function ProjectSidebar() {
             aria-labelledby="delete-project-title"
           >
             <h2 id="delete-project-title" className="project-modal__title">
-              Delete project?
+              Xoá dự án?
             </h2>
             <p className="project-modal__hint">
               <strong>"{deleteTarget.name}"</strong> sẽ bị xoá vĩnh viễn cùng
@@ -368,7 +368,7 @@ export function ProjectSidebar() {
                 onClick={cancelDelete}
                 disabled={deleteBusy}
               >
-                Cancel
+                Huỷ
               </button>
               <button
                 type="button"
@@ -377,7 +377,7 @@ export function ProjectSidebar() {
                 disabled={deleteBusy}
                 autoFocus
               >
-                {deleteBusy ? "Deleting…" : "Delete"}
+                {deleteBusy ? "Đang xoá…" : "Xoá"}
               </button>
             </div>
           </div>
@@ -399,7 +399,7 @@ export function ProjectSidebar() {
             aria-labelledby="new-project-title"
           >
             <h2 id="new-project-title" className="project-modal__title">
-              New project
+              Dự án mới
             </h2>
             <p className="project-modal__hint">
               Tên project hiển thị trong sidebar. Có thể đổi sau.
@@ -415,7 +415,7 @@ export function ProjectSidebar() {
                 if (e.key === "Enter") commitNewDialog();
                 if (e.key === "Escape") closeNewDialog();
               }}
-              placeholder="Untitled"
+              placeholder="Chưa đặt tên"
               disabled={newDialogBusy}
               autoFocus
             />
@@ -426,7 +426,7 @@ export function ProjectSidebar() {
                 onClick={closeNewDialog}
                 disabled={newDialogBusy}
               >
-                Cancel
+                Huỷ
               </button>
               <button
                 type="button"
@@ -434,7 +434,7 @@ export function ProjectSidebar() {
                 onClick={commitNewDialog}
                 disabled={newDialogBusy}
               >
-                {newDialogBusy ? "Creating…" : "Create"}
+                {newDialogBusy ? "Đang tạo…" : "Tạo"}
               </button>
             </div>
           </div>

@@ -62,7 +62,7 @@ export function ActivityBell() {
           aria-label={`Activity (${feed.unreadCount} unread)`}
           title={
             feed.unreadCount === 0
-              ? "Activity"
+              ? "Hoạt động"
               : feed.hasFailed
                 ? `${feed.unreadCount} unread (failed) — click to review`
                 : `${feed.runningCount} running`

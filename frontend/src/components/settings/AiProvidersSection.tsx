@@ -63,7 +63,7 @@ const API_REFERENCE: Record<
 > = {
   minimax: {
     docsUrl: "https://platform.minimax.io/docs/api-reference/text-post",
-    docsLabel: "MiniMax API reference",
+    docsLabel: "Tài liệu API MiniMax",
   },
 };
 type TestState = "untested" | "testing" | "ok" | "fail";
@@ -76,7 +76,7 @@ interface ConnectionTestResult {
 const INITIAL_TEST: ConnectionTestResult = { state: "untested" };
 
 function deriveCurrent(config: LLMConfig | null): LLMProviderName | null {
-  // "Current active provider" = the one all 3 features point at. Any
+  // "Nhà cung cấp đang dùng" = the one all 3 features point at. Any
   // null slot or any divergence (legacy mixed config / partial pick)
   // returns null so the UI prompts the user to consolidate.
   if (!config) return null;
@@ -310,7 +310,7 @@ export function AiProvidersSection() {
       {pending && pendingProvider && (
         <div className="selection-panel">
           {ready && pendingProvider.requiresKey && editingKey ? (
-            // Edit-in-place branch — the user clicked "Update API key"
+            // Edit-in-place branch — the user clicked "Cập nhật API key"
             // on an already-configured provider, so we re-render the
             // paste input (with a Cancel button) on top of the
             // test/apply row. Saving rotates the key in
@@ -507,7 +507,7 @@ function ApiReference({ provider }: ApiReferenceProps) {
 /**
  * Inline API-key paste row for providers that take a Bearer key. Shown
  * when the user picks MiniMax on a fresh install (no key set yet)
- * and also when they click "Update API key" on an already-configured
+ * and also when they click "Cập nhật API key" on an already-configured
  * provider (with `editing=true`). Save is gated on a non-empty
  * value; the backend chmods secrets.json to 0o600 and busts the
  * provider's availability cache so the panel flips to the "ready /
@@ -520,7 +520,7 @@ interface ApiKeyInputProps {
    *  `editing=true` since the user is past setup. */
   onShowHelp?(): void;
   /** True when the user is rotating an already-saved key. Flips the
-   *  copy (heading / hint) and swaps the "Setup help" CTA for a
+   *  copy (heading / hint) and swaps the "Trợ giúp cài đặt" CTA for a
    *  Cancel button so the user can back out of the rotation without
    *  saving. */
   editing?: boolean;

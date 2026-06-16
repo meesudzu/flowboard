@@ -74,6 +74,16 @@ export const NODE_DESCRIPTIONS: Record<NodeType, NodeDescription> = {
   },
 };
 
+// Single-source-of-truth view: just the label for each node type.
+// Derived from NODE_DESCRIPTIONS so the chip bar, tooltip, and
+// canvas card title can never drift apart again. Used by the
+// Zustand store when creating new nodes — see board.ts.
+export const TYPE_TITLE: Record<NodeType, string> = Object.fromEntries(
+  (Object.entries(NODE_DESCRIPTIONS) as [NodeType, NodeDescription][]).map(
+    ([k, v]) => [k, v.label],
+  ),
+) as Record<NodeType, string>;
+
 /**
  * Lookup helper that falls back to a "this is a node" placeholder so
  * unknown types never crash the tooltip render. Defensive — the type

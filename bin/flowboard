@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Flowboard background-service control script (macOS launchd).
+#
+# Usage:  flowboard {install|dev|start|stop|restart|status|logs|build|uninstall}
+#
+#   install    copy the plist to ~/Library/LaunchAgents and start it
+#   dev        foreground mode with --reload (auto-restart on .py edits)
+#              Ctrl+C exits dev AND re-loads the service automatically
+#   start      load + run  (background)
+#   stop       unload
+#   restart    unload + load
+#   status     show whether the service is running + last 5 log lines
+#   logs       tail -f both stdout and stderr
+#   build      rebuild frontend (run after editing React code)
+#   uninstall  stop and remove the plist
+set -euo pipefail
+
+LABEL="com.flowboard.agent"
+PROJECT="/Volumes/FX900/personal/flowboard"
+PLIST_SRC="$PROJECT/scripts/${LABEL}.plist"
+PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+LOG_DIR="$HOME/.flowboard/logs"
+
+red()   { printf "\033[31m%s\033[0m\n" "$*"; }
+green() { printf "\033[32m%s\033[0m\n" "$*"; }
+blue()  { printf "\033[34m%s\033[0m\n" "$*"; }
+
+is_loaded() {
+  launchctl list 2>/dev/null | grep -q "$LABEL"
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  install)
+    [ -f "$PLIST_SRC" ] || { red "missing $PLIST_SRC"; exit 1; }
+    mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
+
+    # Build frontend if dist/ is missing (first install or after fresh clone).
+    if [ ! -d "$PROJECT/frontend/dist" ]; then
+      blue "→ building frontend (first install)…"
+      (cd "$PROJECT/frontend" && npm run build)
+    fi
+
+    # If the user previously installed but moved/recreated the project, the
+    # hash of the binary path may have changed — unload first to be safe.
+    if is_loaded; then
+      launchctl unload "$PLIST_DST" 2>/dev/null || true
+    fi
+
+    cp "$PLIST_SRC" "$PLIST_DST"
+    launchctl load -w "$PLIST_DST"
+    green "✓ installed and started"
+    blue  "  → http://localhost:8101"
+    blue  "  → logs: $LOG_DIR"
+    blue  "  → flowboard status / logs / stop"
+    ;;
+
+  start)
+    if is_loaded; then blue "already loaded"; else launchctl load -w "$PLIST_DST"; green "✓ started"; fi
+    ;;
+
+  stop)
+    if is_loaded; then launchctl unload "$PLIST_DST"; green "✓ stopped"; else blue "not running"; fi
+    ;;
+
+  restart)
+    launchctl unload "$PLIST_DST" 2>/dev/null || true
+    launchctl load -w "$PLIST_DST"
+    green "✓ restarted"
+    ;;
+
+  status)
+    if is_loaded; then
+      green "● running"
+      launchctl list | grep "$LABEL" || true
+      echo
+      blue "tail (out):"; tail -n 5 "$LOG_DIR/agent.out.log" 2>/dev/null || echo "  (no logs yet)"
+      blue "tail (err):"; tail -n 5 "$LOG_DIR/agent.err.log" 2>/dev/null || echo "  (no logs yet)"
+    else
+      red "○ not running"
+    fi
+    ;;
+
+  logs)
+    mkdir -p "$LOG_DIR"
+    tail -n 50 -f "$LOG_DIR/agent.out.log" "$LOG_DIR/agent.err.log"
+    ;;
+
+  build)
+    blue "→ rebuilding frontend…"
+    (cd "$PROJECT/frontend" && npm run build)
+    green "✓ built. restart the agent to pick up the new dist/: flowboard restart"
+    ;;
+
+  uninstall)
+    launchctl unload "$PLIST_DST" 2>/dev/null || true
+    rm -f "$PLIST_DST"
+    green "✓ uninstalled"
+    ;;
+
+  dev)
+    # Foreground mode for active development: --reload watches agent/flowboard
+    # and restarts the worker on any .py change (~0.5s round-trip).
+    # We temporarily unload the LaunchAgent to free :8101, and re-load it on
+    # exit so the service is "always there" the moment you step away.
+    if is_loaded; then
+      blue "→ stopping service to free port 8101…"
+      launchctl unload "$PLIST_DST" 2>/dev/null || true
+      restart_on_exit=true
+    else
+      restart_on_exit=false
+    fi
+
+    cleanup() {
+      echo
+      if [ "$restart_on_exit" = true ]; then
+        blue "→ restarting service…"
+        if launchctl load -w "$PLIST_DST" 2>/dev/null; then
+          green "✓ service back up"
+        else
+          red "✗ failed to restart service — run: flowboard start"
+        fi
+      fi
+    }
+    trap cleanup EXIT INT TERM
+
+    blue "→ uvicorn --reload (Ctrl+C to stop dev + auto-restart service)"
+    blue "  watching: $PROJECT/agent/flowboard/**"
+    blue "  ignoring: .venv, __pycache__, ../storage"
+    cd "$PROJECT/agent"
+    exec ./.venv/bin/uvicorn flowboard.main:app \
+      --host 127.0.0.1 --port 8101 --reload \
+      --reload-dir flowboard \
+      --reload-exclude '.venv' \
+      --reload-exclude '__pycache__' \
+      --reload-exclude '../storage'
+    # exec replaces the shell, so cleanup() only runs on signal from outside
+    # (which is exactly the Ctrl+C case we care about).
+    ;;
+
+  help)
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' | sed '/^$/d'
+    ;;
+
+  *)
+    echo "unknown command: $1" >&2
+    echo "run: flowboard help"
+    exit 1
+    ;;
+esac

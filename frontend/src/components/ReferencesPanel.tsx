@@ -50,14 +50,14 @@ export function ReferencesPanel() {
       >
         <div className="references-panel__header">
           <span className="references-panel__title">
-            <span aria-hidden="true">★</span> Library
+            <span aria-hidden="true">★</span> Thư viện
           </span>
           <button
             type="button"
             className="references-panel__close"
             onClick={togglePanel}
             aria-label="Thu gọn bảng tham chiếu"
-            title="Collapse"
+            title="Thu gọn"
           >
             ›
           </button>
@@ -76,7 +76,7 @@ export function ReferencesPanel() {
         {error && <div className="references-panel__error">{error}</div>}
 
         {loading && items.length === 0 && (
-          <div className="references-panel__empty">Loading…</div>
+          <div className="references-panel__empty">Đang tải…</div>
         )}
 
         {!loading && items.length === 0 && (
@@ -126,7 +126,7 @@ function ReferenceCard({
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(item.label);
   // Inline 2-step delete confirm: first click arms the button (label →
-  // "Confirm?", colour shifts to red), second click within 3s commits
+  // "Xác nhận?", colour shifts to red), second click within 3s commits
   // the DELETE. Anywhere else (timeout, blur, panel scroll) → revert.
   // Replaces the native window.confirm() which was modal + ugly.
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -301,7 +301,7 @@ function ReferenceCard({
             onTogglePin();
           }}
           aria-label={item.pinned ? "Bỏ ghim tham chiếu" : "Ghim tham chiếu"}
-          title={item.pinned ? "Unpin" : "Pin to top"}
+          title={item.pinned ? "Bỏ ghim" : "Ghim lên đầu"}
         >
           {item.pinned ? "★" : "☆"}
         </button>
@@ -313,7 +313,7 @@ function ReferenceCard({
             setRenaming(true);
           }}
           aria-label="Đổi tên tham chiếu"
-          title="Rename"
+          title="Đổi tên"
         >
           ✎
         </button>
@@ -336,7 +336,7 @@ function ReferenceCard({
               : "Xoá (ảnh gốc vẫn còn trong bộ nhớ)"
           }
         >
-          {deleting ? "…" : confirmDelete ? "Confirm?" : "🗑"}
+          {deleting ? "…" : confirmDelete ? "Xác nhận?" : "🗑"}
         </button>
       </div>
     </li>
