@@ -109,14 +109,14 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
-        setError("no project");
+        setError("chưa có dự án");
         return;
       }
       const dbId = parseInt(rfId, 10);
       const resp = await uploadImage(file, projectId, isNaN(dbId) ? undefined : dbId);
       persistMedia(resp.media_id, resp.aspect_ratio);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload failed");
+      setError(err instanceof Error ? err.message : "upload thất bại");
     } finally {
       setUploading(false);
     }
@@ -194,7 +194,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           title="Lưu nhân vật vào thư viện"
           aria-label="Lưu vào thư viện"
         >
-          ★ Save
+          ★ Lưu
         </button>
         <input
           ref={fileInputRef}
@@ -232,7 +232,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
               onClick={onPick}
               disabled={uploading}
             >
-              {uploading ? "Uploading…" : "Upload"}
+              {uploading ? "Đang tải lên…" : "Tải lên"}
             </button>
             <button
               type="button"
@@ -613,14 +613,14 @@ function ImageBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }) {
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
-        setError("no project");
+        setError("chưa có dự án");
         return;
       }
       const dbId = parseInt(rfId, 10);
       const resp = await uploadImage(file, projectId, isNaN(dbId) ? undefined : dbId);
       persistMedia(resp.media_id, resp.aspect_ratio);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload failed");
+      setError(err instanceof Error ? err.message : "upload thất bại");
     } finally {
       setUploading(false);
     }
@@ -692,7 +692,7 @@ function ImageBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }) {
                 onClick={onPick}
                 disabled={uploading}
               >
-                {uploading ? "Uploading…" : "Upload"}
+                {uploading ? "Đang tải lên…" : "Tải lên"}
               </button>
               <button
                 type="button"
@@ -722,7 +722,7 @@ function ImageBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }) {
     const targets = collectGenTargets(rfId);
     if (targets.length === 0) {
       useGenerationStore.setState({
-        error: "Connect this image to a downstream image/video target first.",
+        error: "Kết nối ảnh này vào một ảnh/video phía hạ lưu trước.",
       });
       return;
     }
@@ -1085,14 +1085,14 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
-        setError("no project");
+        setError("chưa có dự án");
         return;
       }
       const dbId = parseInt(rfId, 10);
       const resp = await uploadImage(file, projectId, isNaN(dbId) ? undefined : dbId);
       persistMedia(resp.media_id, resp.aspect_ratio);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload failed");
+      setError(err instanceof Error ? err.message : "upload thất bại");
     } finally {
       setUploading(false);
     }
@@ -1106,7 +1106,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
-        setError("no project");
+        setError("chưa có dự án");
         return;
       }
       const dbId = parseInt(rfId, 10);
@@ -1119,7 +1119,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
       setLinkMode(false);
       setLinkValue("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "link upload failed");
+      setError(err instanceof Error ? err.message : "upload link thất bại");
     } finally {
       setUploading(false);
     }
@@ -1130,14 +1130,14 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
-        setError("no project");
+        setError("chưa có dự án");
         return;
       }
       const resp = await uploadImage(file, projectId);
       setRefMediaId(resp.media_id);
       setRefRefreshKey((k) => k + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ref upload failed");
+      setError(err instanceof Error ? err.message : "upload tham chiếu thất bại");
     }
   }
 
@@ -1190,7 +1190,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
                 onClick={() => uploadFromLink(linkValue)}
                 disabled={uploading || !linkValue.trim()}
               >
-                {uploading ? "Fetching…" : "Save"}
+                {uploading ? "Đang tải…" : "Lưu"}
               </button>
               <button
                 type="button"
@@ -1213,7 +1213,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
               >
-                {uploading ? "Uploading…" : "Upload"}
+                {uploading ? "Đang tải lên…" : "Tải lên"}
               </button>
               <button
                 type="button"
@@ -1288,11 +1288,11 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
           title="Lưu tài sản vào thư viện"
           aria-label="Lưu vào thư viện"
         >
-          ★ Save
+          ★ Lưu
         </button>
       )}
       {refineOpen && (
-        <div className="visual-asset__refine-panel" role="region" aria-label="Refine">
+        <div className="visual-asset__refine-panel" role="region" aria-label="Tinh chỉnh">
           <textarea
             className="visual-asset__refine-textarea"
             placeholder="Mô tả thay đổi…"
@@ -1306,7 +1306,7 @@ function VisualAssetBody({ rfId, data }: { rfId: string; data: FlowboardNodeData
               className="visual-asset__refine-ref"
               onClick={() => refInputRef.current?.click()}
             >
-              {refMediaId ? `Ref ✓ (${refRefreshKey})` : "Add ref"}
+              {refMediaId ? `Tham chiếu ✓ (${refRefreshKey})` : "Thêm tham chiếu"}
             </button>
             <button
               type="button"
@@ -1397,8 +1397,8 @@ function EditableTextBody({
           }}
           placeholder={
             variant === "prompt"
-              ? "Style direction (e.g. cinematic warm tone, magazine editorial mood). Connect into image/video to feed downstream auto-prompt."
-              : "Note, TODO, label…"
+              ? "Định hướng phong cách (vd: tông ấm cinematic, mood tạp chí). Kết nối vào ảnh/video để cấp dữ liệu cho auto-prompt phía sau."
+              : "Ghi chú, TODO, nhãn…"
           }
         />
       </div>
@@ -1408,14 +1408,14 @@ function EditableTextBody({
   const text = data.prompt ?? "";
   const placeholder =
     variant === "prompt"
-      ? "Double-click to add direction…"
-      : "Double-click to add note…";
+      ? "Bấm đúp để thêm định hướng…"
+      : "Bấm đúp để thêm ghi chú…";
 
   return (
     <div
       className={`node-body node-body--${variant}`}
       onDoubleClick={() => setEditing(true)}
-      title="Double-click to edit"
+      title="Bấm đúp để sửa"
     >
       {variant === "prompt" ? (
         <pre className="prompt-text">{text || placeholder}</pre>
@@ -1556,7 +1556,7 @@ export function NodeCard(props: NodeProps<FlowNode>) {
           // body is collapsed. Title is contextual: composing vs. analysing.
           <span className="node-header__llm-pill" aria-live="polite">
             <span className="node-header__llm-spinner" aria-hidden="true" />
-            {data.autoPromptStatus === "pending" ? "Composing…" : "Analyzing…"}
+            {data.autoPromptStatus === "pending" ? "Đang soạn…" : "Đang phân tích…"}
           </span>
         )}
         <div className="node-header__actions">
@@ -1565,7 +1565,7 @@ export function NodeCard(props: NodeProps<FlowNode>) {
               className="node-header__btn"
               onClick={handleDownload}
               aria-label="Tải media xuống"
-              title="Download"
+              title="Tải xuống"
               tabIndex={0}
             >
               ⬇
@@ -1576,7 +1576,7 @@ export function NodeCard(props: NodeProps<FlowNode>) {
               className={`node-header__btn${isRunning ? " node-header__btn--running" : ""}`}
               onClick={handleGenerate}
               aria-label="Tạo từ ô này"
-              title={llmBusy ? "Backend vẫn đang soạn — thử lại sau ít giây" : "Generate"}
+              title={llmBusy ? "Backend vẫn đang soạn — thử lại sau ít giây" : "Tạo"}
               tabIndex={0}
               disabled={llmBusy}
             >

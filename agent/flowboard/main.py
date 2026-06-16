@@ -132,3 +132,25 @@ async def ext_callback(
 
     matched = flow_client.resolve_callback(payload)
     return {"ok": matched}
+
+
+# ── Production-style local: serve the built frontend on the same port ────
+# In `make dev` the user runs Vite on :5173 which proxies /api → :8101.
+# When running as a background LaunchAgent we want a single port, so we
+# mount the static build output and let FastAPI handle both API + UI.
+# Mount order matters: API routes (registered above) take precedence;
+# StaticFiles only catches paths no router matched. `html=True` serves
+# index.html for SPA-style paths (e.g. /board/abc).
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_FRONTEND_DIST = _Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
+    logger.info("serving frontend from %s", _FRONTEND_DIST)
+else:
+    logger.warning(
+        "frontend/dist not found at %s — UI will 404. "
+        "Run `make frontend-build` then restart the agent.",
+        _FRONTEND_DIST,
+    )

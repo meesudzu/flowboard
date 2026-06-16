@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.flowboard.agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Volumes/FX900/personal/flowboard/agent/.venv/bin/uvicorn</string>
+        <string>flowboard.main:app</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8101</string>
+        <string>--log-level</string>
+        <string>info</string>
+    </array>
+
+    <!-- Run from agent/ so the `flowboard` package is importable. config.py
+         resolves ROOT from __file__ and defaults storage/ to <project>/storage,
+         so the SQLite file stays where the rest of the project expects it. -->
+    <key>WorkingDirectory</key>
+    <string>/Volumes/FX900/personal/flowboard/agent</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Volumes/FX900/personal/flowboard/agent/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+    </dict>
+
+    <!-- Start on launchctl load (== at user login). -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart on any exit, including crash. ThrottleInterval=5s avoids a
+         crash-loop burning CPU if the binary is missing or DB is locked. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- Logs: split stdout/stderr so HTTP 4xx doesn't drown real errors. -->
+    <key>StandardOutPath</key>
+    <string>/Users/friday/.flowboard/logs/agent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/friday/.flowboard/logs/agent.err.log</string>
+
+    <!-- ProcessType=Interactive keeps the service in the user's GUI session
+         (some macOS subsystems behave differently under Background). -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

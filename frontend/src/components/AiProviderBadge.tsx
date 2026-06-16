@@ -10,12 +10,12 @@ import { AiProviderDialog } from "./AiProviderDialog";
 
 /**
  * Compact toolbar entry point for the AI Provider stack. MiniMax-only
- * build: the badge always shows "MiniMax" (or "Setup AI" when no key
+ * build: the badge always shows "MiniMax" (or "Cài AI" when no key
  * is configured). Click opens the AiProviderDialog.
  *
  * Three render states:
  *  1. Not configured — `config.configured === false`. Renders a
- *     "Setup AI" CTA in warning style. The forced-setup gate at the App
+ *     "Cài AI" CTA in warning style. The forced-setup gate at the App
  *     level usually opens the dialog before the user even sees this,
  *     but the badge stays consistent if they cancel out.
  *  2. Configured + healthy — "MiniMax" label + ✓ icon.
@@ -76,7 +76,7 @@ export function AiProviderBadge() {
         type="button"
         className="ai-provider-badge ai-provider-badge--loading"
         disabled
-        aria-label="AI Providers"
+        aria-label="Nhà cung cấp AI"
       >
         <span className="ai-provider-badge__icon" aria-hidden="true">🤖</span>
         <span className="ai-provider-badge__label">AI</span>
@@ -98,7 +98,7 @@ export function AiProviderBadge() {
           aria-label="Cài đặt nhà cung cấp AI"
         >
           <span className="ai-provider-badge__icon" aria-hidden="true">🤖</span>
-          <span className="ai-provider-badge__label">Setup AI</span>
+          <span className="ai-provider-badge__label">Cài AI</span>
           <span
             className="ai-provider-badge__status ai-provider-badge__status--warn"
             aria-hidden="true"
@@ -135,7 +135,7 @@ export function AiProviderBadge() {
         className={`ai-provider-badge${unhealthy ? " ai-provider-badge--warn" : ""}`}
         onClick={() => setOpen(true)}
         title={tooltip}
-        aria-label="AI Providers"
+        aria-label="Nhà cung cấp AI"
       >
         <span className="ai-provider-badge__icon" aria-hidden="true">🤖</span>
         <span className="ai-provider-badge__label">{PROVIDER_LABEL[primary]}</span>

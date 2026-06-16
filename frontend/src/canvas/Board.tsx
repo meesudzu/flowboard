@@ -158,7 +158,7 @@ export function Board() {
         const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
         void useBoardStore.getState().addReferenceNode(ref, flowPos);
       } catch (err) {
-        console.warn("Failed to parse reference drop payload", err);
+        console.warn("Không parse được payload tham chiếu khi kéo thả", err);
       }
     },
     [screenToFlowPosition],

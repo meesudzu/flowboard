@@ -44,9 +44,9 @@ export function ActivityDropdown({
   }, [onClose]);
 
   return (
-    <div ref={panelRef} className="activity-dropdown" role="dialog" aria-label="Activity">
+    <div ref={panelRef} className="activity-dropdown" role="dialog" aria-label="Hoạt động">
       <div className="activity-dropdown__header">
-        <span className="activity-dropdown__title">Activity</span>
+        <span className="activity-dropdown__title">Hoạt động</span>
         <span className="activity-dropdown__count">
           {items.length} {items.length === 1 ? "item" : "items"}
         </span>

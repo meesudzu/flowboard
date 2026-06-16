@@ -235,7 +235,7 @@ export function GenerationDialog() {
 
   // Per-variant selection for multi-source i2v. Default: all selected.
   // Stored as a Set of indices so the UI can toggle individual variants
-  // and "All / None" without juggling parallel arrays.
+  // and "Tất cả / Bỏ chọn" without juggling parallel arrays.
   const [selectedSourceIdx, setSelectedSourceIdx] = useState<Set<number>>(new Set());
   // Tracks which Source-Reference chip's variant picker is currently
   // open. Holds the edge id the picker is anchored to (one open at a
@@ -274,7 +274,7 @@ export function GenerationDialog() {
   const isStoryboard = targetType === "Storyboard";
   // Omni Flash is a video model but with image-target semantics: it
   // takes ingredients (multi reference images), NOT a single i2v start
-  // frame. So the dialog should show the same "Source references" chip
+  // frame. So the dialog should show the same "Tham chiếu nguồn" chip
   // list that image targets use, and hide Veo's source-image selector.
   const isOmniVideo = isVideo && videoModelFamily === "omni_flash";
   // Prompt nodes are text-only — clicking Generate runs auto_prompt
@@ -697,7 +697,7 @@ export function GenerationDialog() {
         useGenerationStore.setState({
           error: err instanceof Error
             ? `Auto-prompt failed: ${err.message}`
-            : "Auto-prompt failed",
+            : "Tự sinh prompt thất bại",
         });
         return;
       }
@@ -780,14 +780,14 @@ export function GenerationDialog() {
           <div>
             <h2 id="gen-dialog-title" className="gen-dialog__title">
               {isVideo
-                ? "Generate video"
+                ? "Tạo video"
                 : isCharacter
-                ? "Generate character"
+                ? "Tạo nhân vật"
                 : isStoryboard
-                ? "Generate storyboard"
+                ? "Tạo storyboard"
                 : isPrompt
-                ? "Edit prompt"
-                : "Generate image"}
+                ? "Sửa prompt"
+                : "Tạo ảnh"}
             </h2>
             <span className="gen-dialog__subtitle">
               Node #{node?.data.shortId ?? rfId}
@@ -796,7 +796,7 @@ export function GenerationDialog() {
           <button
             className="gen-dialog__close"
             onClick={closeGenerationDialog}
-            aria-label="Close dialog (Escape)"
+            aria-label="Đóng hộp thoại (Esc)"
           >
             esc
           </button>
@@ -807,9 +807,9 @@ export function GenerationDialog() {
           <div className="gen-dialog__field">
             <div className="gen-dialog__label-row">
               <label className="gen-dialog__label" htmlFor="gen-prompt">
-                {isVideo ? "Motion prompt" : "Prompt"}
+                {isVideo ? "Prompt chuyển động" : "Prompt"}
                 {autoPromptUsed && (
-                  <span className="gen-dialog__auto-badge" title="Auto-generated from upstream nodes">
+                  <span className="gen-dialog__auto-badge" title="Tự sinh từ các ô phía trên">
                     ✨ auto
                   </span>
                 )}
@@ -838,13 +838,13 @@ export function GenerationDialog() {
               readOnly={hasStoryboardUpstream}
               title={
                 hasStoryboardUpstream
-                  ? "Locked: storyboard motion template (animates panels in order)"
+                  ? "Đã khoá: template chuyển động storyboard (chạy các panel theo thứ tự)"
                   : undefined
               }
             />
             {hasStoryboardUpstream && (
               <p className="gen-dialog__hint gen-dialog__hint--locked">
-                🎬 <strong>Storyboard motion template</strong> — locked because an
+                🎬 <strong>Template chuyển động storyboard</strong> — locked because an
                 upstream Storyboard node is feeding this video. Flow animates
                 the composite panels in order (frame 1 →
                 {" "}{totalPanels(storyboardUpstreamGrid)}). Other refs
@@ -865,7 +865,7 @@ export function GenerationDialog() {
         {isCharacter && (
           <>
             <div className="gen-dialog__field">
-              <span className="gen-dialog__label">Gender</span>
+              <span className="gen-dialog__label">Giới tính</span>
               <div className="aspect-chip-row">
                 {CHARACTER_GENDERS.map((g) => (
                   <button
@@ -897,7 +897,7 @@ export function GenerationDialog() {
             </div>
 
             <div className="gen-dialog__field">
-              <span className="gen-dialog__label">Vibe</span>
+              <span className="gen-dialog__label">Phong cách</span>
               <div className="aspect-chip-row">
                 {CHARACTER_VIBES.map((v) => (
                   <button
@@ -954,14 +954,14 @@ export function GenerationDialog() {
                       )
                     }
                   >
-                    All
+                    Tất cả
                   </button>
                   <button
                     type="button"
                     className="source-select-mini"
                     onClick={() => setSelectedSourceIdx(new Set())}
                   >
-                    None
+                    Bỏ chọn
                   </button>
                 </div>
               )}
@@ -1020,7 +1020,7 @@ export function GenerationDialog() {
               </>
             ) : (
               <div className="source-image-row source-image-row--empty">
-                Connect an upstream image node with rendered media first
+                Kết nối một ô ảnh phía trên đã có ảnh được tạo trước
               </div>
             )}
           </div>
@@ -1039,7 +1039,7 @@ export function GenerationDialog() {
             </span>
             <div className="ref-source-row">
               {promptSourceNodes.map((p) => {
-                const preview = p.text.trim() || "(empty prompt)";
+                const preview = p.text.trim() || "(prompt trống)";
                 return (
                   <div
                     key={p.edgeId}
@@ -1143,7 +1143,7 @@ export function GenerationDialog() {
         {/* Aspect ratio — irrelevant for prompt nodes (text-only). */}
         {!isPrompt && (
           <div className="gen-dialog__field">
-            <span className="gen-dialog__label">Aspect ratio</span>
+            <span className="gen-dialog__label">Tỉ lệ khung hình</span>
             <div className="aspect-chip-row">
               {(isVideo ? VIDEO_ASPECT_RATIOS : IMAGE_ASPECT_RATIOS).map((ar) => (
                 <button
@@ -1167,7 +1167,7 @@ export function GenerationDialog() {
           <div className="gen-dialog__field">
             <span className="gen-dialog__label">
               Duration (Omni Flash)
-              <InfoTip tip="Omni Flash dispatches via video:batchAsyncGenerateVideoReferenceImages with the upstream image(s) as IMAGE_USAGE_TYPE_ASSET refs. Duration scales credit cost: 4s=15, 6s=20, 8s=25, 10s=30." />
+              <InfoTip tip="Omni Flash dispatch qua video:batchAsyncGenerateVideoReferenceImages với ảnh phía trên làm ref kiểu IMAGE_USAGE_TYPE_ASSET. Duration tỉ lệ với credit: 4s=15, 6s=20, 8s=25, 10s=30." />
             </span>
             <div className="aspect-chip-row">
               {OMNI_FLASH_DURATIONS.map((d) => {
@@ -1274,7 +1274,7 @@ export function GenerationDialog() {
             above) and prompt nodes. */}
         {!isVideo && !isPrompt && (
           <div className="gen-dialog__field">
-            <span className="gen-dialog__label">Variants</span>
+            <span className="gen-dialog__label">Biến thể</span>
             <div className="variants-stepper">
               <button
                 type="button"
@@ -1293,7 +1293,7 @@ export function GenerationDialog() {
               >
                 +
               </button>
-              <span className="variants-stepper__hint">1–4 images per request</span>
+              <span className="variants-stepper__hint">1–4 ảnh mỗi lượt</span>
             </div>
           </div>
         )}
@@ -1305,8 +1305,8 @@ export function GenerationDialog() {
         {isStoryboard && (
           <div className="gen-dialog__field">
             <span className="gen-dialog__label">
-              Grid
-              <InfoTip tip="Storyboard renders as a SINGLE composite image — Flow draws the whole grid as one picture. The topic field above is your story (e.g. Rùa và Thỏ); the locked template wraps it for you. For 2×3 / 2×4 the rows × cols flip with the aspect ratio so panels stay readable on both landscape and portrait composites." />
+              Lưới
+              <InfoTip tip="Storyboard render thành MỘT ảnh ghép duy nhất — Flow vẽ cả lưới như một bức. Ô topic phía trên là câu chuyện của bạn (vd: Rùa và Thỏ); template đã khoá sẽ tự bọc lại cho bạn. Với 2×3 / 2×4 thì hàng × cột sẽ đảo theo tỉ lệ khung hình để panel vẫn dễ đọc trên cả landscape và portrait." />
             </span>
             <div className="aspect-chip-row">
               {STORYBOARD_GRIDS.map((g) => {

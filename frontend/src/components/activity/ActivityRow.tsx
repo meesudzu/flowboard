@@ -16,7 +16,7 @@ export function ActivityRow({ item, onClick, onCancel }: ActivityRowProps) {
   const dur = item.duration_ms !== null ? formatDuration(item.duration_ms) : "";
   const [busy, setBusy] = useState(false);
   const canCancel =
-    (item.status === "queued" || item.status === "running") && !!onCancel;
+    (item.status === "đang chờ" || item.status === "đang chạy") && !!onCancel;
 
   async function handleCancel(e: React.MouseEvent) {
     e.stopPropagation();
@@ -61,13 +61,13 @@ export function ActivityRow({ item, onClick, onCancel }: ActivityRowProps) {
         <div className="activity-row__meta">
           {relativeTime(item.created_at)}
           {dur &&
-            (item.status === "done" ||
-              item.status === "failed" ||
-              item.status === "canceled" ||
-              item.status === "timeout") && (
+            (item.status === "xong" ||
+              item.status === "thất bại" ||
+              item.status === "đã huỷ" ||
+              item.status === "hết thời gian") && (
               <span className="activity-row__dur"> · {dur}</span>
             )}
-          {(item.status === "failed" || item.status === "timeout") && (
+          {(item.status === "thất bại" || item.status === "hết thời gian") && (
             <span className="activity-row__hint"> · click for error</span>
           )}
         </div>
@@ -85,9 +85,9 @@ export function ActivityRow({ item, onClick, onCancel }: ActivityRowProps) {
           onClick={handleCancel}
           disabled={busy}
           aria-label={`Cancel ${meta.label}`}
-          title="Cancel"
+          title="Huỷ"
         >
-          {busy ? "…" : "Cancel"}
+          {busy ? "…" : "Huỷ"}
         </button>
       )}
     </div>

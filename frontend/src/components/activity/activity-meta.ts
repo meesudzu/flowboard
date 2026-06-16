@@ -7,13 +7,13 @@ export const ACTIVITY_TYPE_META: Record<
   string,
   { label: string; group: "llm" | "gen" | "upload" }
 > = {
-  auto_prompt:       { label: "Auto-Prompt",         group: "llm" },
-  auto_prompt_batch: { label: "Auto-Prompt (batch)", group: "llm" },
-  vision:            { label: "Vision",              group: "llm" },
-  planner:           { label: "Planner",             group: "llm" },
-  gen_image:         { label: "Generate image",      group: "gen" },
-  gen_video:         { label: "Generate video",      group: "gen" },
-  edit_image:        { label: "Edit image",          group: "gen" },
+  auto_prompt:       { label: "Tự sinh prompt",         group: "llm" },
+  auto_prompt_batch: { label: "Tự sinh prompt (lô)", group: "llm" },
+  vision:            { label: "Phân tích ảnh",              group: "llm" },
+  planner:           { label: "Lập kế hoạch",             group: "llm" },
+  gen_image:         { label: "Tạo ảnh",      group: "gen" },
+  gen_video:         { label: "Tạo video",      group: "gen" },
+  edit_image:        { label: "Sửa ảnh",          group: "gen" },
   upload:            { label: "Upload (file)",       group: "upload" },
   upload_url:        { label: "Upload (link)",       group: "upload" },
 };
@@ -28,18 +28,18 @@ export function metaFor(type: string) {
 
 export const STATUS_META: Record<
   string,
-  { icon: string; label: string; tone: "muted" | "running" | "ok" | "fail" }
+  { icon: string; label: string; tone: "muted" | "đang chạy" | "ok" | "fail" }
 > = {
-  queued:   { icon: "⋯", label: "queued",   tone: "muted" },
-  running:  { icon: "⟳", label: "running",  tone: "running" },
-  done:     { icon: "✓", label: "done",     tone: "ok" },
-  failed:   { icon: "✗", label: "failed",   tone: "fail" },
+  queued:   { icon: "⋯", label: "đang chờ",   tone: "muted" },
+  running:  { icon: "⟳", label: "đang chạy",  tone: "đang chạy" },
+  done:     { icon: "✓", label: "xong",     tone: "ok" },
+  failed:   { icon: "✗", label: "thất bại",   tone: "fail" },
   // User-initiated cancel — soft, not an error. Muted tone so it
   // doesn't compete visually with real failures.
-  canceled: { icon: "⊘", label: "canceled", tone: "muted" },
+  canceled: { icon: "⊘", label: "đã huỷ", tone: "muted" },
   // Auto-cancel after the 5-minute video-gen budget elapses. Treated
   // as a soft failure so the badge still pings the user.
-  timeout:  { icon: "⏱", label: "timeout",  tone: "fail" },
+  timeout:  { icon: "⏱", label: "hết thời gian",  tone: "fail" },
 };
 
 export function statusMeta(status: string) {
@@ -49,9 +49,9 @@ export function statusMeta(status: string) {
 export function relativeTime(iso: string): string {
   const t = new Date(iso).getTime();
   const diff = Date.now() - t;
-  if (diff < 0) return "just now";
+  if (diff < 0) return "vừa xong";
   const sec = Math.round(diff / 1000);
-  if (sec < 5) return "just now";
+  if (sec < 5) return "vừa xong";
   if (sec < 60) return `${sec}s ago`;
   const min = Math.round(sec / 60);
   if (min < 60) return `${min}m ago`;
