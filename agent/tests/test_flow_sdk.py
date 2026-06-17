@@ -1031,6 +1031,72 @@ async def test_check_async_workflow_mode_4xx_still_terminal():
 
 
 @pytest.mark.asyncio
+async def test_check_async_workflow_mode_404_is_soft_error_hint():
+    """A 404 from /v1/media/<id> is AMBIGUOUS — could be transient
+    (Flow briefly 404s the media endpoint mid-render) OR persistent
+    (prompt was blocked at the safety stage and the media was never
+    created on Flow's side, so every subsequent poll returns the
+    same 404). The SDK surfaces it as a "soft error" — ``error`` is
+    set so the worker can see the reason, but ``done`` stays False
+    so a single transient 404 doesn't prematurely terminate a
+    legitimate render. The worker is responsible for promoting 3+
+    consecutive identical soft errors to a hard terminal.
+
+    Repro from the field: a Veo / Omni Flash dispatch with a prompt
+    that Flow's safety classifier rejects. Flow returns 200 + a
+    workflow handle on the POST, then 404 NOT_FOUND on every
+    /v1/media/<id> poll for 5 minutes straight. Without this hint
+    the worker polls for the full 5-minute timeout and stamps
+    ``error='timeout_waiting_video'`` — useless diagnostic. With the
+    hint, the worker can detect the streak and surface the real
+    cause (e.g. ``PUBLIC_ERROR_UNSAFE_GENERATION`` once we know the
+    404 is terminal).
+    """
+
+    class _MissingMediaClient(RecordingClient):
+        async def api_request(self, **kwargs):
+            self.api_calls.append(kwargs)
+            return {
+                "id": "missing-1",
+                "status": 404,
+                "data": {
+                    "error": {
+                        "code": 404,
+                        "message": "Requested entity was not found.",
+                        "status": "NOT_FOUND",
+                    }
+                },
+            }
+
+    c = _MissingMediaClient()
+    sdk = FlowSDK(client=c)  # type: ignore[arg-type]
+    out = await sdk.check_async(
+        ["wf-uuid"],
+        workflows=[{"name": "wf-uuid", "primary_media_id": "primary-missing"}],
+    )
+    ops = out["operations"]
+    # Soft error: the op is NOT done (so the worker keeps polling on
+    # the first occurrence), but the inner Flow error message is
+    # surfaced so the worker can decide when to bail.
+    assert ops[0]["done"] is False
+    # The SDK wraps the raw 404 in a Vietnamese message so the
+    # activity log + detail viewer tell the user exactly why the
+    # video was removed (Google safety filter) instead of a generic
+    # "Requested entity was not found" they'd otherwise have to
+    # Google-translate. Original Flow reason kept in parens for
+    # log-grep.
+    err = ops[0]["error"] or ""
+    assert "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng" in err
+    assert "Requested entity was not found" in err
+    # Status field is unset — Flow's 404 is a top-level HTTP error,
+    # not a MEDIA_GENERATION_STATUS_*. The worker matches on
+    # consecutive identical ``error`` strings, not on this field.
+    assert ops[0]["status"] is None
+    # The raw poll is still surfaced for the activity-detail viewer.
+    assert out["raw"]["workflow_polls"][0]["resp"]["status"] == 404
+
+
+@pytest.mark.asyncio
 async def test_check_async_workflow_mode_recovery_after_5xx():
     """End-to-end: first poll is 500 (transient → not done), second poll
     returns valid MP4 bytes (→ done). Mirrors the exact failure mode from

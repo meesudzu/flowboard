@@ -980,3 +980,216 @@ def test_omni_flash_resolve_model():
     import pytest as _pt
     with _pt.raises(ValueError, match="unsupported"):
         resolve_omni_flash_model(5)
+
+
+@pytest.mark.asyncio
+async def test_worker_gen_video_omni_promotes_persistent_404_to_terminal(
+    client, monkeypatch,
+):
+    """Real-world repro: Omni Flash dispatches OK, then every poll of
+    /v1/media/<id> returns 404 NOT_FOUND because Flow's safety filter
+    rejected the prompt at the dispatch stage — the media entity was
+    never created on Google's side. Before this fix the worker polled
+    for the full 5-minute timeout and stamped a generic
+    ``timeout_waiting_video``. The SDK now surfaces 404 as a soft-error
+    hint, and the worker promotes 3 consecutive identical soft errors
+    to a hard terminal so the user sees the real cause in the activity
+    log within ~30s instead of waiting the full 5 minutes."""
+    from flowboard.worker import processor as proc
+    from flowboard.services import media_project_sync as sync_mod
+
+    monkeypatch.setattr(proc, "VIDEO_POLL_INTERVAL_S", 0.01)
+
+    # Bypass the cross-project re-upload — fixture has no real bytes.
+    async def _stub_sync(ids, project_id):
+        return list(ids), []
+    monkeypatch.setattr(sync_mod, "ensure_media_ids_in_project", _stub_sync)
+
+    poll_count = {"n": 0}
+
+    class _StubSdk:
+        async def gen_video_omni(self, **kwargs):
+            return {"raw": {}, "operation_names": ["op-omni-404"]}
+
+        async def check_async(self, names, workflows=None):
+            poll_count["n"] += 1
+            # Mimic the real SDK response for a prompt-blocked dispatch:
+            # 404 NOT_FOUND on /v1/media/<id>, wrapped by _poll_workflows
+            # in a Vietnamese message that tells the user Google removed
+            # the video because the prompt violated community standards.
+            return {
+                "raw": {},
+                "operations": [
+                    {
+                        "name": "op-omni-404",
+                        "done": False,
+                        "media_entries": [],
+                        "status": None,
+                        "error": (
+                            "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
+                            "(chi tiết: Requested entity was not found)"
+                        ),
+                    }
+                ],
+            }
+
+    monkeypatch.setattr(proc, "get_flow_sdk", lambda: _StubSdk())
+
+    row = client.post(
+        "/api/requests",
+        json={
+            "type": "gen_video_omni",
+            "params": {
+                "prompt": "blocked prompt",
+                "project_id": "abcd1234",
+                "ref_media_ids": ["ref-1"],
+                "duration_s": 6,
+                "aspect_ratio": "VIDEO_ASPECT_RATIO_PORTRAIT",
+                "paygate_tier": "PAYGATE_TIER_ONE",
+            },
+        },
+    ).json()
+
+    w = WorkerController(handlers={"gen_video_omni": proc._handle_gen_video_omni})
+    task = asyncio.create_task(w.start())
+    try:
+        w.enqueue(row["id"])
+        for _ in range(200):
+            await asyncio.sleep(0.02)
+            current = client.get(f"/api/requests/{row['id']}").json()
+            if current["status"] not in ("queued", "running"):
+                break
+        # Promotion must happen — 5-min timeout is the bug we're fixing.
+        assert current["status"] == "failed", current
+        # The real cause is preserved on the row, not the generic timeout.
+        # The SDK wraps the 404 in a Vietnamese message so the user
+        # immediately sees that Google removed the video because the
+        # prompt violated community standards (the common case for
+        # this 404 pattern is Veo / Imagen's safety classifier).
+        err = current["error"] or ""
+        assert "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng" in err
+        assert "Requested entity was not found" in err
+        # Promotion kicks in at 3 consecutive identical soft errors, so
+        # the worker bails after exactly 3 polls — not 5 minutes.
+        assert poll_count["n"] == 3, (
+            f"expected bail-out at 3 polls, got {poll_count['n']}"
+        )
+        # `op_errors` carries the same message for the detail viewer.
+        assert "op_errors" in current["result"]
+        slot_err = current["result"]["op_errors"]["op-omni-404"]
+        assert "Google đã xóa video" in slot_err
+        assert "Requested entity was not found" in slot_err
+    finally:
+        w.request_shutdown()
+        await asyncio.wait_for(task, timeout=2.0)
+
+
+@pytest.mark.asyncio
+async def test_worker_gen_video_omni_does_not_promote_transient_404(
+    client, monkeypatch,
+):
+    """A 404 on the very first poll (transient — Flow briefly 404s the
+    media endpoint mid-render) must NOT trigger the promotion. The
+    streak resets the moment a non-error response lands. The op should
+    succeed normally when the encodedVideo payload arrives on the
+    third poll."""
+    from flowboard.worker import processor as proc
+    from flowboard.services import media_project_sync as sync_mod
+    import base64 as _b64
+
+    monkeypatch.setattr(proc, "VIDEO_POLL_INTERVAL_S", 0.01)
+
+    async def _stub_sync(ids, project_id):
+        return list(ids), []
+    monkeypatch.setattr(sync_mod, "ensure_media_ids_in_project", _stub_sync)
+
+    poll_count = {"n": 0}
+
+    class _StubSdk:
+        async def gen_video_omni(self, **kwargs):
+            return {"raw": {}, "operation_names": ["op-omni-flaky"]}
+
+        async def check_async(self, names, workflows=None):
+            poll_count["n"] += 1
+            if poll_count["n"] == 1:
+                # Transient 404 — Flow's media endpoint briefly 404s
+                # before the encodedVideo payload lands. Must NOT
+                # promote after just 1 occurrence. Mirrors the SDK's
+                # Vietnamese-wrapped 404 message.
+                return {
+                    "raw": {},
+                    "operations": [
+                        {
+                            "name": "op-omni-flaky",
+                            "done": False,
+                            "media_entries": [],
+                            "status": None,
+                            "error": (
+                                "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
+                                "(chi tiết: Requested entity was not found)"
+                            ),
+                        }
+                    ],
+                }
+            # Subsequent polls return a real MP4 — the 404 streak
+            # resets to 0 and the op succeeds.
+            # Build a minimal valid MP4 box (just the ftyp box is
+            # enough for the parser to recognise it as a complete file).
+            ftyp = b"\x00\x00\x00\x18ftypisom" + b"\x00\x00\x02\x00" + b"isomiso2avc1mp41"
+            encoded = _b64.b64encode(ftyp).decode("ascii")
+            return {
+                "raw": {},
+                "operations": [
+                    {
+                        "name": "op-omni-flaky",
+                        "done": True,
+                        "media_entries": [
+                            {
+                                "media_id": "omni-vid-flaky",
+                                "url": "https://flow-content.google/video/omni-vid-flaky?sig=z",
+                                "mediaType": "video",
+                                "encoded_video": encoded,
+                            }
+                        ],
+                        "status": "MEDIA_GENERATION_STATUS_SUCCESSFUL",
+                        "error": None,
+                    }
+                ],
+            }
+
+    monkeypatch.setattr(proc, "get_flow_sdk", lambda: _StubSdk())
+
+    row = client.post(
+        "/api/requests",
+        json={
+            "type": "gen_video_omni",
+            "params": {
+                "prompt": "transient",
+                "project_id": "abcd1234",
+                "ref_media_ids": ["ref-1"],
+                "duration_s": 6,
+                "aspect_ratio": "VIDEO_ASPECT_RATIO_PORTRAIT",
+                "paygate_tier": "PAYGATE_TIER_ONE",
+            },
+        },
+    ).json()
+
+    w = WorkerController(handlers={"gen_video_omni": proc._handle_gen_video_omni})
+    task = asyncio.create_task(w.start())
+    try:
+        w.enqueue(row["id"])
+        for _ in range(200):
+            await asyncio.sleep(0.02)
+            current = client.get(f"/api/requests/{row['id']}").json()
+            if current["status"] not in ("queued", "running"):
+                break
+        # Op must succeed — the transient 404 on the first poll is
+        # exactly the case the streak guard is protecting against.
+        assert current["status"] == "done", current
+        assert current["result"]["media_ids"] == ["omni-vid-flaky"]
+        # At least 2 polls (the 404 + the success).
+        assert poll_count["n"] >= 2
+    finally:
+        w.request_shutdown()
+        await asyncio.wait_for(task, timeout=2.0)
+

@@ -233,6 +233,16 @@ async def _handle_gen_video(params: dict) -> tuple[dict, Optional[str]]:
     entry_by_name: dict[str, dict] = {}
     op_errors: dict[str, str] = {}
     rid = params.get("__request_id")
+    # Per-op, per-error-code consecutive count for "soft" errors. A soft
+    # error is one the SDK returns with `done: False` — currently only
+    # the workflow-mode 404 ("media not found") falls in this bucket.
+    # Transient 404s (Flow briefly 404-ing the media endpoint mid-render)
+    # only last 1-2 polls so the counter resets on the next 200 OK.
+    # Persistent 404s (prompt blocked at the safety stage — media was
+    # never created) hit 3+ in a row within ~30s, so we promote them to
+    # a hard terminal error instead of waiting the full 5-minute timeout.
+    soft_error_streak: dict[str, dict[str, int]] = {}
+    SOFT_ERROR_PROMOTE_THRESHOLD = 3
 
     # Per-op resolution: each operation in the batch resolves
     # independently (success, content-filter rejection, or timeout). We
@@ -276,11 +286,44 @@ async def _handle_gen_video(params: dict) -> tuple[dict, Optional[str]]:
             # PUBLIC_ERROR_UNSAFE_GENERATION / PUBLIC_ERROR_AUDIO_FILTERED).
             # Mark this op resolved-with-error and keep polling the rest.
             err = op.get("error")
-            if isinstance(err, str) and err:
+            is_done = bool(op.get("done"))
+            if isinstance(err, str) and err and is_done:
+                # Hard terminal: SDK set both error and done=True (e.g.
+                # 4xx non-404 from the workflow poll endpoint, or a
+                # MEDIA_GENERATION_STATUS_FAILED on the OLD schema).
                 done_by_name[name] = True
                 op_errors[name] = err
                 continue
-            if op.get("done"):
+            if isinstance(err, str) and err and not is_done:
+                # Soft error: SDK surfaced an error hint but the op is
+                # still "not done" — currently only workflow-mode 404
+                # (media not found, likely a content filter that
+                # rejected the dispatch). Track the streak per error
+                # code; if the same code repeats SOFT_ERROR_PROMOTE_THRESHOLD
+                # times in a row, promote it to a hard terminal so we
+                # don't wait the full 5-minute timeout.
+                streak = soft_error_streak.setdefault(name, {})
+                # Reset other error codes for this op — only an identical
+                # streak is suspicious. A different transient error
+                # shouldn't carry over the previous count.
+                for k in list(streak.keys()):
+                    if k != err:
+                        streak.pop(k, None)
+                streak[err] = streak.get(err, 0) + 1
+                if streak[err] >= SOFT_ERROR_PROMOTE_THRESHOLD:
+                    logger.warning(
+                        "op %s: %d consecutive '%s' soft errors — promoting to terminal "
+                        "(likely a persistent content filter on the workflow)",
+                        name[:8], streak[err], err,
+                    )
+                    done_by_name[name] = True
+                    op_errors[name] = err
+                continue
+            if is_done:
+                # Clear any soft-error streak for this op on a clean
+                # success — protects against a stray 404 right before
+                # the encodedVideo payload lands.
+                soft_error_streak.pop(name, None)
                 done_by_name[name] = True
                 # Each op is expected to yield exactly one media entry
                 # on success; capture the first valid one.
@@ -537,6 +580,12 @@ async def _handle_gen_video_omni(params: dict) -> tuple[dict, Optional[str]]:
     entry_by_name: dict[str, dict] = {}
     op_errors: dict[str, str] = {}
     rid = params.get("__request_id")
+    # Per-op, per-error-code consecutive count for soft errors (see the
+    # matching block in _handle_gen_video for the full rationale). Omni
+    # Flash also polls /v1/media/<id>, so it hits the same workflow-mode
+    # 404 ("media not found, likely a content filter") case.
+    soft_error_streak: dict[str, dict[str, int]] = {}
+    SOFT_ERROR_PROMOTE_THRESHOLD = 3
 
     while (
         poll_attempts < VIDEO_POLL_MAX_CYCLES
@@ -565,11 +614,31 @@ async def _handle_gen_video_omni(params: dict) -> tuple[dict, Optional[str]]:
             if not isinstance(name, str) or done_by_name.get(name, False):
                 continue
             err = op.get("error")
-            if isinstance(err, str) and err:
+            is_done = bool(op.get("done"))
+            if isinstance(err, str) and err and is_done:
                 done_by_name[name] = True
                 op_errors[name] = err
                 continue
-            if op.get("done"):
+            if isinstance(err, str) and err and not is_done:
+                # Soft error streak — see _handle_gen_video for the
+                # full rationale. 3+ identical soft errors in a row
+                # means the dispatch was rejected (likely a content
+                # filter) and polling further is pointless.
+                streak = soft_error_streak.setdefault(name, {})
+                for k in list(streak.keys()):
+                    if k != err:
+                        streak.pop(k, None)
+                streak[err] = streak.get(err, 0) + 1
+                if streak[err] >= SOFT_ERROR_PROMOTE_THRESHOLD:
+                    logger.warning(
+                        "omni op %s: %d consecutive '%s' soft errors — promoting to terminal",
+                        name[:8], streak[err], err,
+                    )
+                    done_by_name[name] = True
+                    op_errors[name] = err
+                continue
+            if is_done:
+                soft_error_streak.pop(name, None)
                 done_by_name[name] = True
                 for e in op.get("media_entries") or []:
                     if isinstance(e, dict) and e.get("media_id"):

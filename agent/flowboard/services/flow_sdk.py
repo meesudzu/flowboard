@@ -772,6 +772,46 @@ class FlowSDK:
                 )
                 continue
 
+            # 404 is ambiguous: transient (Flow briefly 404s the media
+            # endpoint mid-render) OR persistent terminal — the prompt
+            # was blocked by Google's safety classifier at the dispatch
+            # stage, the media entity was never created on Flow's side,
+            # and every subsequent poll returns the same 404. Without
+            # this hint the worker polls for the full 5-minute timeout
+            # and surfaces a generic `timeout_waiting_video` instead of
+            # a content-filter error. Surface a soft-error hint on the
+            # op entry — the worker tracks consecutive identical errors
+            # and treats 3+ in a row as terminal.
+            #
+            # The error string is in Vietnamese so the activity log +
+            # detail viewer tell the user "Google đã xóa video vì prompt
+            # vi phạm" in plain language — far more actionable than the
+            # raw `Requested entity was not found` they'd otherwise see
+            # only after 5 minutes of waiting. The original Flow reason
+            # is appended in parens for power-users / log-grep.
+            if status_code == 404:
+                inner_404 = _extract_inner_api_error(resp)
+                logger.warning(
+                    "workflow poll 404 for %s — will retry, but the worker "
+                    "promotes 3+ consecutive 404s to a terminal error "
+                    "(likely a content filter on the prompt): %s",
+                    mid[:8], inner_404 or "media not found",
+                )
+                vi_msg = (
+                    f"Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
+                    f"(chi tiết: {inner_404 or 'media not found'})"
+                )
+                ops_summary.append(
+                    {
+                        "name": name,
+                        "done": False,
+                        "media_entries": [],
+                        "status": None,
+                        "error": vi_msg,
+                    }
+                )
+                continue
+
             # `data` is the body; for /v1/media it's the media object directly.
             data = resp.get("data") if isinstance(resp.get("data"), dict) else {}
             video_block = data.get("video") if isinstance(data.get("video"), dict) else {}
