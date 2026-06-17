@@ -798,8 +798,7 @@ class FlowSDK:
                     mid[:8], inner_404 or "media not found",
                 )
                 vi_msg = (
-                    f"Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
-                    f"(chi tiết: {inner_404 or 'media not found'})"
+                    f"Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng"
                 )
                 ops_summary.append(
                     {

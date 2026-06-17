@@ -1087,7 +1087,6 @@ async def test_check_async_workflow_mode_404_is_soft_error_hint():
     # log-grep.
     err = ops[0]["error"] or ""
     assert "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng" in err
-    assert "Requested entity was not found" in err
     # Status field is unset — Flow's 404 is a top-level HTTP error,
     # not a MEDIA_GENERATION_STATUS_*. The worker matches on
     # consecutive identical ``error`` strings, not on this field.

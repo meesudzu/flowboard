@@ -1026,8 +1026,7 @@ async def test_worker_gen_video_omni_promotes_persistent_404_to_terminal(
                         "media_entries": [],
                         "status": None,
                         "error": (
-                            "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
-                            "(chi tiết: Requested entity was not found)"
+                            "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng"
                         ),
                     }
                 ],
@@ -1068,7 +1067,6 @@ async def test_worker_gen_video_omni_promotes_persistent_404_to_terminal(
         # this 404 pattern is Veo / Imagen's safety classifier).
         err = current["error"] or ""
         assert "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng" in err
-        assert "Requested entity was not found" in err
         # Promotion kicks in at 3 consecutive identical soft errors, so
         # the worker bails after exactly 3 polls — not 5 minutes.
         assert poll_count["n"] == 3, (
@@ -1125,8 +1123,7 @@ async def test_worker_gen_video_omni_does_not_promote_transient_404(
                             "media_entries": [],
                             "status": None,
                             "error": (
-                                "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng "
-                                "(chi tiết: Requested entity was not found)"
+                                "Google đã xóa video vì prompt vi phạm tiêu chuẩn cộng đồng"
                             ),
                         }
                     ],
