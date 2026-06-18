@@ -17,7 +17,31 @@
 set -euo pipefail
 
 LABEL="com.flowboard.agent"
-PROJECT="/Volumes/FX900/personal/flowboard"
+
+# Derive PROJECT from the script's own location so the CLI works no
+# matter where the repo is cloned. Follows symlinks (so `flowboard`
+# on PATH or an alias in ~/bin both resolve to the real bin/ dir).
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+PROJECT="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+
+# Sanity check: refuse to run if the resolved path doesn't look like a
+# flowboard checkout. Catches "moved the script without updating
+# symlinks" / "ran from a stale copy in /tmp" before we silently do
+# the wrong thing to a different directory tree.
+for _fb_required in bin agent frontend scripts; do
+  [ -d "$PROJECT/$_fb_required" ] || {
+    echo "fatal: $PROJECT is not a flowboard project (missing $_fb_required/)" >&2
+    exit 1
+  }
+done
+unset _fb_required
+
 PLIST_SRC="$PROJECT/scripts/${LABEL}.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/.flowboard/logs"
