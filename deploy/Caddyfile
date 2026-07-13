@@ -1,25 +1,43 @@
-# Flowboard Caddyfile — HTTP-only origin, Cloudflare handles public TLS
+# Flowboard Caddyfile — Cloudflare-fronted, Cloudflare SSL = Full
 #
 # Setup:
-#   • Cloudflare proxies flow.runany.dev → <VPS_IP>:8080 (plain HTTP)
-#   • Cloudflare SSL/TLS mode = "Flexible"
-#     (CF terminates TLS for end users, forwards plaintext to origin)
-#   • Caddy listens on :8080 only — no cert, no ACME, no port 443 needed
+#   • Cloudflare proxies flow.runany.dev → <VPS_IP>:443 (HTTPS)
+#   • Cloudflare SSL/TLS mode = "Full" (accepts self-signed on origin)
+#   • Caddy terminates TLS on :443 with a self-signed cert (auto-generated)
+#     AND listens on :8080 for direct local admin (Apache vhost also points here)
 #
-# Trade-off: traffic between Cloudflare edge and origin is plaintext.
-# For personal use this is fine — that segment traverses Cloudflare's
-# backbone which is generally trusted. If you need CF→origin encryption,
-# switch Cloudflare to "Full" mode and add a cert block to this file.
+# Note: with Cloudflare Full, the CF→origin connection IS encrypted (just not
+# by a public CA), so WebSocket upgrade headers pass through end-to-end.
+#
+# Routing:
+#   • WS upgrade (Connection: Upgrade + Upgrade: websocket)
+#     → agent:9223   (dedicated ws_server.py)
+#   • Anything else (HTTP REST + StaticFiles frontend)
+#     → agent:8101   (uvicorn FastAPI)
 
 {
 	email {$EMAIL:admin@example.com}
 	admin off
 }
 
-http://{$DOMAIN:localhost}:8080 {
+# ── HTTPS on :443 — primary path (Cloudflare → here) ──────────────────
+https://{$DOMAIN:localhost}:443 {
 	encode zstd gzip
 
-	# ── WebSocket matcher ─────────────────────────────────────
+	# Self-signed cert generated on-the-fly by Caddy. Cloudflare Full mode
+	# accepts any cert on origin including self-signed.
+	tls internal
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# ── WebSocket matcher ───────────────────────────────────────────
 	@ws {
 		header Connection *Upgrade*
 		header Upgrade websocket
@@ -36,7 +54,40 @@ http://{$DOMAIN:localhost}:8080 {
 		}
 	}
 
-	# ── HTTP fallback ─────────────────────────────────────────
+	# ── HTTP fallback ───────────────────────────────────────────────
+	handle {
+		reverse_proxy agent:8101 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	log {
+		output stdout
+		level INFO
+	}
+}
+
+# ── HTTP on :8080 — used by Apache vhost + local curl ─────────────────
+http://{$DOMAIN:localhost}:8080 {
+	encode zstd gzip
+
+	@ws {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	handle @ws {
+		reverse_proxy agent:9223 {
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 0s
+				read_timeout 0s
+				write_timeout 0s
+				versions h2c 1.1
+			}
+		}
+	}
+
 	handle {
 		reverse_proxy agent:8101 {
 			header_up Host {host}
