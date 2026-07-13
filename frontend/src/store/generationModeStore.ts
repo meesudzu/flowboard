@@ -27,6 +27,26 @@ export type GenerationResultStatus =
   | "failed"
   | "canceled";
 
+/**
+ * Per-file upload state. The route does uploads in parallel (4-at-a-time
+ * on the agent side), so each file lands its own status independently.
+ *
+ * The frontend optimistically adds an entry per File at click time and
+ * reconciles against the route response (keyed by filename since the
+ * same File may be re-selected after a refresh and we don't have a
+ * stable server-side id yet).
+ */
+export interface PendingUpload {
+  clientId: string;
+  filename: string;
+  /** Local blob URL of the file -- lives only as long as the page,
+   *  so we can render a thumbnail while the upload is in flight.
+   */
+  previewUrl: string;
+  status: "uploading" | "done" | "failed";
+  error?: string;
+}
+
 export interface GenerationResult {
   id: number;
   board_id: number;
@@ -58,6 +78,11 @@ export interface GenerationModeState {
   error: string | null;
   /** Last generation batch: list of request ids so cancel/all flows have something to act on. */
   activeRequestIds: number[];
+  /** Per-file upload state for the in-flight products. Mirrors the
+   *  backend's ``{products, failures}`` aggregation so the grid can
+   *  show a per-tile spinner / done / failed badge without forcing
+   *  the user to wait for the full bulk response. */
+  pendingUploads: PendingUpload[];
 
   load(boardId: number): Promise<void>;
   uploadModel(file: File): Promise<void>;
@@ -96,6 +121,7 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
   autoPrompting: false,
   error: null,
   activeRequestIds: [],
+  pendingUploads: [],
 
   async load(boardId) {
     set({ boardId, loading: true, error: null });
@@ -163,7 +189,23 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
     if (bid === null) return;
     const arr = Array.from(files);
     if (arr.length === 0) return;
-    set({ uploadingProducts: true, error: null });
+
+    // Optimistically register one pending-tile per File with a local
+    // blob: URL so the user sees an immediate thumbnail + spinner per
+    // file. The URL is revoked when the entry is cleared below.
+    const now = Date.now();
+    const optimistic: PendingUpload[] = arr.map((f, i) => ({
+      clientId: `${now}-${i}-${f.name}`,
+      filename: f.name,
+      previewUrl: URL.createObjectURL(f),
+      status: "uploading",
+    }));
+    set((s) => ({
+      uploadingProducts: true,
+      pendingUploads: [...s.pendingUploads, ...optimistic],
+      error: null,
+    }));
+
     try {
       const fd = new FormData();
       for (const f of arr) fd.append("files", f);
@@ -171,8 +213,82 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
         method: "POST",
         body: fd,
       });
-      if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) {
+        throw new Error(await readError(res));
+      }
+      // Backend splits outcomes into ``products`` (successes with
+      // filenames echoed back) and ``failures`` (filename -> error
+      // message). We use the filename to match each result to the
+      // optimistic PendingUpload entry.
+      const data: {
+        products?: Array<{ filename?: string }>;
+        failures?: Array<{ filename: string; error: string }>;
+      } = await res.json();
+      const succeededNames = new Set<string>(
+        (data.products ?? [])
+          .map((p) => p.filename)
+          .filter((n): n is string => Boolean(n))
+      );
+      const failureByName = new Map<string, string>(
+        (data.failures ?? []).map((f) => [f.filename, f.error])
+      );
+      const stillUploading = new Set(optimistic.map((p) => p.filename));
+      set((s) => ({
+        pendingUploads: s.pendingUploads.map((pu) => {
+          if (!stillUploading.has(pu.filename)) return pu;
+          if (succeededNames.has(pu.filename)) {
+            return { ...pu, status: "done" };
+          }
+          return {
+            ...pu,
+            status: "failed",
+            error: failureByName.get(pu.filename) ?? "upload failed",
+          };
+        }),
+      }));
+
+      // Refresh the products list so the actual GenerationProduct rows
+      // appear in the gallery. Keep the pending tiles for one tick so
+      // the user sees "Done" / "Failed" briefly before they disappear
+      // -- otherwise the transition to the real product is jarring.
       await get().refresh();
+      window.setTimeout(() => {
+        set((s) => ({
+          pendingUploads: s.pendingUploads.filter(
+            (pu) => !stillUploading.has(pu.filename),
+          ),
+        }));
+        // Revoke blob URLs to free memory (we only needed them for
+        // the brief done-and-fading state).
+        for (const pu of optimistic) {
+          if (pu.previewUrl) URL.revokeObjectURL(pu.previewUrl);
+        }
+      }, 1200);
+    } catch (err) {
+      // Bulk request itself failed (4xx/5xx with no body). Mark every
+      // pending tile as failed with the same error and stop -- the
+      // user can retry.
+      const msg = err instanceof Error ? err.message : String(err);
+      const stillUploading = new Set(optimistic.map((p) => p.filename));
+      set((s) => ({
+        pendingUploads: s.pendingUploads.map((pu) =>
+          stillUploading.has(pu.filename)
+            ? { ...pu, status: "failed", error: msg }
+            : pu
+        ),
+        error: msg,
+      }));
+      // Still revoke the blob URLs after a brief error-display window.
+      window.setTimeout(() => {
+        set((s) => ({
+          pendingUploads: s.pendingUploads.filter(
+            (pu) => !stillUploading.has(pu.filename),
+          ),
+        }));
+        for (const pu of optimistic) {
+          if (pu.previewUrl) URL.revokeObjectURL(pu.previewUrl);
+        }
+      }, 3000);
     } finally {
       set({ uploadingProducts: false });
     }

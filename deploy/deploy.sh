@@ -21,7 +21,7 @@
 #   ./deploy.sh up -d
 #   ./deploy.sh status
 #   # On local machine:
-#   ./deploy.sh patch-extension https://flow.example.com
+#   ./deploy.sh patch-extension https://flow.runany.dev
 # ─────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -118,7 +118,7 @@ cmd_status() {
     say "/api/health (via caddy, requires DOMAIN set in .env + DNS pointing here):"
     local domain
     domain=$(grep '^FLOWBOARD_DOMAIN=' .env | cut -d= -f2-)
-    if [[ -n "$domain" && "$domain" != "flow.example.com" ]]; then
+    if [[ -n "$domain" && "$domain" != "flow.runany.dev" ]]; then
         curl -sS --max-time 5 "https://${domain}/api/health" \
             | python3 -m json.tool 2>/dev/null \
             || warn "agent not yet reachable on https://${domain}"
@@ -143,7 +143,7 @@ cmd_backup() {
 # ── patch-extension ─────────────────────────────────────────────────
 cmd_patch_extension() {
     local url="${1:-}"
-    [[ -n "$url" ]] || die "usage: ./deploy.sh patch-extension https://flow.example.com"
+    [[ -n "$url" ]] || die "usage: ./deploy.sh patch-extension https://flow.runany.dev"
 
     # strip trailing slash
     url="${url%/}"

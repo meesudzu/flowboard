@@ -26,6 +26,7 @@ the user seeing the old one in the same row.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -236,9 +237,75 @@ async def upload_model(board_id: int, file: UploadFile = File(...)):
     }
 
 
+#: Bound parallel uploads to keep Chrome-extension round-trips in check.
+#: Flow dispatches one WS request at a time per project, so anything
+#: beyond ~4 concurrent uploads serialises inside the extension anyway
+#: -- but capping here avoids holding N connections open from the agent
+#: side and keeps the per-upload latency observable in the UI.
+_MAX_UPLOAD_CONCURRENCY = 4
+
+
+async def _do_upload_one(
+    board_id: int,
+    project_id: str,
+    f: "UploadFile",
+    pos: int,
+) -> dict[str, Any]:
+    """Upload a single file + write its GenerationProduct row.
+
+    Returns ``{"ok": True, "filename": ..., "product": {...}}`` on success
+    or ``{"ok": False, "filename": ..., "error": str, "position": int}``
+    on any failure. The caller aggregates these into the endpoint's
+    response (see ``upload_products``).
+    """
+    try:
+        out = await _upload_one(f, project_id, node_id=None)
+    except HTTPException as exc:
+        # Propagate the user-friendly detail (mime / size / validation
+        # errors) so the frontend can show it in the per-file UI.
+        detail = exc.detail
+        msg = detail.get("message") if isinstance(detail, dict) else str(detail)
+        return {"ok": False, "filename": f.filename, "position": pos, "error": str(msg)[:500]}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "filename": f.filename, "position": pos, "error": str(exc)[:500]}
+
+    with get_session() as s:
+        prod = GenerationProduct(
+            board_id=board_id,
+            media_id=out["media_id"],
+            position=pos,
+        )
+        s.add(prod)
+        s.commit()
+        s.refresh(prod)
+    return {
+        "ok": True,
+        "filename": f.filename,
+        "position": pos,
+        "product": {
+            "id": prod.id,
+            "media_id": prod.media_id,
+            "position": prod.position,
+            "label": prod.label,
+            "uploaded_at": prod.uploaded_at.isoformat() if prod.uploaded_at else None,
+        },
+    }
+
+
 @router.post("/products")
 async def upload_products(board_id: int, files: list[UploadFile] = File(...)):
-    """Upload one or more product images. Each becomes a GenerationProduct row."""
+    """Upload one or more product images. Each becomes a GenerationProduct row.
+
+    Files are uploaded to Flow **in parallel** (concurrency capped at
+    ``_MAX_UPLOAD_CONCURRENCY = 4`` -- Flow's uploadImage is dispatched
+    one-at-a-time per project inside the extension, so this cap keeps
+    round-trips observable in the UI without pointless overshoot).
+
+    Per-file outcomes are echoed back via ``products`` (successes) and
+    ``failures`` (rejected / errored), matched to the input by filename.
+    The frontend uses this to render an individual state per image
+    instead of one global "uploading products" spinner.
+    """
     if not files:
         raise HTTPException(400, "no files provided")
     with get_session() as s:
@@ -251,28 +318,44 @@ async def upload_products(board_id: int, files: list[UploadFile] = File(...)):
         ).first()
         next_pos = (max_pos or 0) + 1
 
-    created: list[dict[str, Any]] = []
-    pos = next_pos
-    for f in files:
-        out = await _upload_one(f, project_id, node_id=None)
-        with get_session() as s:
-            prod = GenerationProduct(
-                board_id=board_id,
-                media_id=out["media_id"],
-                position=pos,
-            )
-            s.add(prod)
-            s.commit()
-            s.refresh(prod)
-        created.append({
-            "id": prod.id,
-            "media_id": prod.media_id,
-            "position": prod.position,
-            "label": prod.label,
-            "uploaded_at": prod.uploaded_at.isoformat() if prod.uploaded_at else None,
-        })
-        pos += 1
-    return {"products": created}
+    # Assign positions upfront so the parallel tasks write rows in a
+    # deterministic order even when they complete out-of-order. This
+    # keeps the gallery stable when the user drops 10 files at once.
+    positions = list(range(next_pos, next_pos + len(files)))
+
+    sem = asyncio.Semaphore(_MAX_UPLOAD_CONCURRENCY)
+    async def _bounded(f: "UploadFile", pos: int) -> dict[str, Any]:
+        async with sem:
+            return await _do_upload_one(board_id, project_id, f, pos)
+
+    tasks = [_bounded(f, pos) for f, pos in zip(files, positions)]
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    products: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for f, pos, r in zip(files, positions, raw_results):
+        if isinstance(r, Exception):
+            # Defensive: if the helper itself raised (it shouldn't --
+            # it captures exceptions internally -- but a programming
+            # error or asyncio.CancelledError would surface here).
+            err_msg = f"{type(r).__name__}: {r}"[:500]
+            failures.append({
+                "filename": f.filename,
+                "position": pos,
+                "error": err_msg,
+            })
+            continue
+        if r.get("ok"):
+            prod = dict(r["product"])
+            prod["filename"] = f.filename
+            products.append(prod)
+        else:
+            failures.append({
+                "filename": f.filename,
+                "position": pos,
+                "error": r.get("error", "unknown"),
+            })
+    return {"products": products, "failures": failures}
 
 
 @router.delete("/products/{product_id}")

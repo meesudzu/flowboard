@@ -32,7 +32,7 @@ chuyển tiếp vào loopback.
 - VPS Linux (Debian 12 / Ubuntu 24.04 khuyến nghị)
 - Docker Engine ≥ 24 + plugin `docker compose`
 - Mở port 80 + 443 ra internet
-- DNS A/AAAA record trỏ `flow.example.com` về IP VPS **trước khi** chạy
+- DNS A/AAAA record trỏ `flow.runany.dev` về IP VPS **trước khi** chạy
 - MiniMax API key
 
 ## Setup một lần trên VPS
@@ -67,7 +67,7 @@ fail kiểm tra:
 
 ```bash
 # DNS đã trỏ về đúng IP chưa?
-dig +short flow.example.com
+dig +short flow.runany.dev
 # Firewall đã mở 80/443 chưa?
 sudo ufw status
 # Log caddy
@@ -82,7 +82,7 @@ URL mới:
 ```bash
 # Trên máy local (có repo), KHÔNG cần SSH vào VPS:
 cd /path/to/flowboard
-./deploy/deploy.sh patch-extension https://flow.example.com
+./deploy/deploy.sh patch-extension https://flow.runany.dev
 ```
 
 Script này sửa 2 file:
@@ -90,8 +90,8 @@ Script này sửa 2 file:
 - `extension/manifest.json` — thay `http://127.0.0.1:8101` và
   `ws://127.0.0.1:9223` trong `host_permissions` bằng URL VPS
 - `extension/background.js` — đổi `AGENT_WS_URL` thành
-  `wss://flow.example.com/` và `CALLBACK_URL` thành
-  `https://flow.example.com/api/ext/callback`
+  `wss://flow.runany.dev/` và `CALLBACK_URL` thành
+  `https://flow.runany.dev/api/ext/callback`
 
 Sau đó mở `chrome://extensions` → bấm **Reload** trên Flowboard Bridge.
 

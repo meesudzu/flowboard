@@ -5494,7 +5494,12 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 24px 32px 32px 32px;
+  /* Bottom padding is generous so the last row of the results
+   * gallery isn't permanently hidden under the sticky action bar
+   * when the user scrolls to the end. The bar itself docks 12px
+   * from the bottom; 96px here gives the last product card enough
+   * breathing room to read fully before the bar covers it. */
+  padding: 24px 32px 96px 32px;
   width: 100%;
   box-sizing: border-box;
   overflow-y: auto;
@@ -5947,11 +5952,16 @@ button:disabled {
 /* Action bar at the very end of the scrollable column. We don't
  * use position: sticky here because the parent generation-board is the
  * scroll container — `sticky` inside an `overflow-y: auto` parent only
- * sticks to that parent's edges, which is fragile. A regular block at
- * the end of the column is unambiguous: it scrolls into view, then
- * stays visible just past the last content block.
+ * pinned to the bottom of the products scroll viewport so the
+ * "Tạo ảnh" button is always one click away -- no scrolling back
+ * down after each round of edits. Sticky here works because
+ * ``.generation-board`` is itself the scrolling container (overflow-y:
+ * auto + flex column) and the action-bar is its child.
  */
 .generation-board__action-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -5959,7 +5969,17 @@ button:disabled {
   background: rgba(20, 20, 28, 0.92);
   border: 1px solid var(--border, #34344a);
   border-radius: 12px;
+  /* Soft glass so the gallery behind the sticky bar is still
+   * readable if the user happens to be on the last row when the bar
+   * docks to the bottom of the viewport. */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  /* Drop-shadow upward so the bar visually floats over the gallery
+   * rather than feeling like a chunk of opaque rectangle stuck to
+   * the page. */
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
   margin-top: 6px;
+  margin-bottom: 4px;
 }
 
 .generation-board__progress {
@@ -6190,4 +6210,53 @@ button.generation-board__thumb-button:hover {
 .generation-board__autoprompt-btn:hover:not(:disabled) {
   background: rgba(139, 92, 246, 0.18);
   color: #d6c4ff;
+}
+
+/* ── Pending upload tile (in-flight product) ──────────────────────────── */
+
+/* Tinted tile so the user can tell uploaded vs in-flight apart at a
+ * glance. The thumbnail comes from a local blob: URL the store
+ * created at click time -- so it's the user's own selected image, not
+ * a placeholder. The status pill rides on top of the thumbnail. */
+.generation-board__pending-tile {
+  position: relative;
+  opacity: 0.92;
+}
+
+.generation-board__pending-tile--done {
+  opacity: 0.6; /* briefly lower so the user perceives the transition. */
+}
+
+.generation-board__pending-tile--failed {
+  outline: 1px solid rgba(244, 63, 94, 0.55);
+  outline-offset: -1px;
+}
+
+/* Per-file spinner overlay so the user can track each upload
+ * independently instead of a single global "Uploading products…" pill.
+ */
+.generation-board__pending-tile .generation-board__product-thumb {
+  position: relative;
+}
+
+.generation-board__pending-tile .generation-board__product-thumb img {
+  filter: brightness(0.85);
+}
+
+.generation-board__pending-tile-pill--uploading {
+  background: rgba(139, 92, 246, 0.85);
+  color: #fff;
+}
+
+.generation-board__pending-tile-pill--uploading::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: generation-board__spin 0.7s linear infinite;
+  vertical-align: -1px;
 }

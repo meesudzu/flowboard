@@ -1058,41 +1058,119 @@ _DEFAULT_HANDLERS: dict[str, Handler] = {
 
 
 class WorkerController:
-    """Single-consumer async queue worker."""
+    """Async queue worker with bounded concurrency.
 
-    def __init__(self, handlers: Optional[dict[str, Handler]] = None) -> None:
+    Earlier this was strictly serial: one Request at a time. The
+    generation-mode batch path emits ONE Request covering up to
+    ``MAX_VARIANT_COUNT`` (4) products per Flow call, so the serial
+    loop already pipelines batches of 4 together.
+
+    But a few legacy paths still emit one Request per product (single
+    regenerate-one, any future per-product workflow), and even the
+    batch path can balloon when the user uploads 12+ products into a
+    single "Tạo ảnh" click. To keep those cases fast, the controller
+    now dispatches up to ``_max_concurrency`` Requests in parallel.
+
+    The default concurrency (``MAX_VARIANT_COUNT``) matches the batch
+    ceiling so a board that enqueued 8 per-product Requests lands
+    two-at-a-time. Override via the constructor for tests that need
+    strict serial semantics (the existing flow contract is fully
+    preserved -- this is purely throughput).
+    """
+
+    def __init__(
+        self,
+        handlers: Optional[dict[str, Handler]] = None,
+        max_concurrency: Optional[int] = None,
+    ) -> None:
+        # Default to the production batch ceiling so a board that
+        # enqueued 8 per-product Requests fans out two-at-a-time.
+        # Tests that need strict serial semantics pass
+        # ``max_concurrency=1`` explicitly.
+        from flowboard.services.flow_sdk import MAX_VARIANT_COUNT
+        chosen = MAX_VARIANT_COUNT if max_concurrency is None else int(max_concurrency)
         self._queue: asyncio.Queue[int] = asyncio.Queue()
         self._handlers = dict(handlers or _DEFAULT_HANDLERS)
         self._shutdown = asyncio.Event()
         self._active = 0
         self._started_at: Optional[float] = None
+        self._max_concurrency = max(1, chosen)
+        # Tasks tracked for drain() on shutdown -- populated by start().
+        self._inflight: set = set()
 
-    # ── enqueue ────────────────────────────────────────────────────────────
     def enqueue(self, request_id: int) -> None:
         self._queue.put_nowait(request_id)
 
-    # ── lifecycle ──────────────────────────────────────────────────────────
+    async def _run_one(self, rid: int) -> None:
+        """Wrapper that decrements _active on completion regardless of
+        outcome. Keeps the bookkeeping out of _process_one so the
+        processing logic stays focused on Request + handler semantics.
+        """
+        try:
+            await self._process_one(rid)
+        finally:
+            self._active -= 1
+
     async def start(self) -> None:
         self._started_at = time.time()
-        logger.info("worker started")
+        logger.info(
+            "worker started (max_concurrency=%d)", self._max_concurrency
+        )
+        # Pull + dispatch loop. Don't hold the queue across an entire
+        # batch -- each new Request gets spawned immediately up to the
+        # concurrency ceiling, so the worker stays responsive even
+        # while a slow Flow dispatch is in flight.
         while not self._shutdown.is_set():
+            # If the pool is full, wait for at least one in-flight
+            # task to complete before pulling the next.
+            while (
+                self._active >= self._max_concurrency
+                and not self._shutdown.is_set()
+            ):
+                if not self._inflight:
+                    break
+                done, _ = await asyncio.wait(
+                    self._inflight,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for t in done:
+                    self._inflight.discard(t)
+            if self._shutdown.is_set():
+                break
             try:
-                rid = await asyncio.wait_for(self._queue.get(), timeout=0.5)
+                rid = await asyncio.wait_for(self._queue.get(), timeout=0.25)
             except asyncio.TimeoutError:
                 continue
-            await self._process_one(rid)
+            self._active += 1
+            task = asyncio.create_task(self._run_one(rid))
+            self._inflight.add(task)
+            task.add_done_callback(self._inflight.discard)
+
+        # Shutdown path: drain in-flight tasks before returning. The
+        # lifespan handler awaits drain() via asyncio.wait_for, so
+        # bounded by the 5s timeout there.
+        if self._inflight:
+            await asyncio.gather(*self._inflight, return_exceptions=True)
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
 
     async def drain(self) -> None:
-        # Wait for any in-flight task to finish.
-        while self._active > 0:
+        """Wait until every in-flight task has finished.
+
+        Bounded externally by asyncio.wait_for so a stuck handler
+        can't pin the process forever at shutdown.
+        """
+        while self._active > 0 or self._inflight:
             await asyncio.sleep(0.05)
 
     @property
     def active_count(self) -> int:
         return self._active
+
+    @property
+    def max_concurrency(self) -> int:
+        return self._max_concurrency
 
     @property
     def uptime_s(self) -> Optional[float]:

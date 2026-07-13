@@ -71,6 +71,7 @@ export function GenerationBoard() {
   const addProducts = useGenerationModeStore((s) => s.addProducts);
   const removeProduct = useGenerationModeStore((s) => s.removeProduct);
   const updatePrompt = useGenerationModeStore((s) => s.updatePrompt);
+  const pendingUploads = useGenerationModeStore((s) => s.pendingUploads);
   const updateAspectRatio = useGenerationModeStore((s) => s.updateAspectRatio);
   const updateImageModel = useGenerationModeStore((s) => s.updateImageModel);
   const startGeneration = useGenerationModeStore((s) => s.startGeneration);
@@ -464,6 +465,12 @@ export function GenerationBoard() {
           </button>
         ) : (
           <ul className="generation-board__product-grid">
+            {pendingUploads.map((pu) => (
+              <PendingUploadTile
+                key={pu.clientId}
+                upload={pu}
+              />
+            ))}
             {products.map((p) => (
               <ProductTile
                 key={p.id}
@@ -705,4 +712,55 @@ function formatTimestamp(iso: string): string {
   } catch {
     return "";
   }
+}
+
+
+/**
+ * Live upload slot rendered in the products grid while a file is in
+ * flight. Uses the local blob: URL for a real thumbnail (the user's
+ * own selected image) and shows a per-tile status pill so the user
+ * can track each upload independently instead of staring at one
+ * global "uploading products…" spinner.
+ */
+function PendingUploadTile({
+  upload,
+}: {
+  upload: import("../store/generationModeStore").PendingUpload;
+}) {
+  const label =
+    upload.status === "uploading"
+      ? "Đang upload…"
+      : upload.status === "failed"
+      ? `Lỗi: ${upload.error ?? "unknown"}`
+      : "Xong";
+  return (
+    <li
+      className={
+        "generation-board__product-tile generation-board__pending-tile"
+        + (upload.status === "failed" ? " generation-board__pending-tile--failed" : "")
+        + (upload.status === "done" ? " generation-board__pending-tile--done" : "")
+      }
+      title={upload.filename + " — " + label}
+    >
+      <div className="generation-board__product-thumb">
+        <img src={upload.previewUrl} alt={upload.filename} />
+        <span
+          className={
+            "generation-board__product-pill"
+            + (upload.status === "uploading"
+              ? " generation-board__pending-tile-pill--uploading"
+              : upload.status === "failed"
+              ? " generation-board__product-pill--failed"
+              : " generation-board__product-pill--done")
+          }
+        >
+          {upload.status === "uploading"
+            ? "Đang upload"
+            : upload.status === "failed"
+            ? "Lỗi"
+            : "Xong"}
+        </span>
+      </div>
+    </li>
+  );
 }
