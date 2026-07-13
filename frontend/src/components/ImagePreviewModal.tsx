@@ -2,8 +2,15 @@ import { useCallback, useEffect } from "react";
 import { mediaUrl } from "../api/client";
 
 interface ImagePreviewModalProps {
-  /** Flow-issued media id of the image to preview. */
+  /** Flow-issued media id of the image to preview. Ignored if `previewSrc` is set. */
   mediaId: string | null;
+  /**
+   * Direct image src (e.g. a `data:` URL) to show instead of resolving
+   * `mediaId` through the `/media/<id>` endpoint. Used for in-flight
+   * previews where the bytes haven't been ingested yet (model upload
+   * mid-flight) so there's no Flow media_id to fetch.
+   */
+  previewSrc?: string | null;
   /** Human-readable label shown above the image (e.g. the product name). */
   alt?: string;
   onClose: () => void;
@@ -20,7 +27,7 @@ interface ImagePreviewModalProps {
  * so the modal's own state (Escape listener, body scroll lock) doesn't
  * need to micro-manage mount/unmount.
  */
-export function ImagePreviewModal({ mediaId, alt, onClose }: ImagePreviewModalProps) {
+export function ImagePreviewModal({ mediaId, previewSrc, alt, onClose }: ImagePreviewModalProps) {
   const onKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -32,7 +39,7 @@ export function ImagePreviewModal({ mediaId, alt, onClose }: ImagePreviewModalPr
   );
 
   useEffect(() => {
-    if (mediaId === null) return;
+    if (mediaId === null && !previewSrc) return;
     document.addEventListener("keydown", onKey);
     // Lock body scroll while open so the page under the modal doesn't
     // jank when the user scrolls. The lock is a class instead of inline
@@ -44,9 +51,9 @@ export function ImagePreviewModal({ mediaId, alt, onClose }: ImagePreviewModalPr
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [mediaId, onKey]);
+  }, [mediaId, previewSrc, onKey]);
 
-  if (mediaId === null) return null;
+  if (mediaId === null && !previewSrc) return null;
 
   const onBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
@@ -72,7 +79,7 @@ export function ImagePreviewModal({ mediaId, alt, onClose }: ImagePreviewModalPr
       {alt && <div className="image-preview-modal__caption">{alt}</div>}
       <img
         className="image-preview-modal__img"
-        src={mediaUrl(mediaId)}
+        src={previewSrc ?? mediaUrl(mediaId ?? "")}
         alt={alt ?? ""}
         // Drag-prevent so users don't accidentally start an image drag
         // gesture on the modal (the underlying product tile has its own

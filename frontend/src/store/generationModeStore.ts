@@ -39,8 +39,10 @@ export type GenerationResultStatus =
 export interface PendingUpload {
   clientId: string;
   filename: string;
-  /** Local blob URL of the file -- lives only as long as the page,
-   *  so we can render a thumbnail while the upload is in flight.
+  /** Local data: URL (base64) of the file -- used as a live
+   *  thumbnail while the upload is in flight. The image is the
+   *  user's own selected file so they get a real preview, not a
+   *  spinner placeholder.
    */
   previewUrl: string;
   status: "uploading" | "done" | "failed";
@@ -71,6 +73,13 @@ export interface GenerationModeState {
    *  Chrome extension and take seconds, not ms — show a spinner on the model
    *  drop zone). */
   uploadingModel: boolean;
+  /** Live preview of the model image currently being uploaded. Set
+   *  as soon as the user picks a file (so the tile flips to their
+   *  image with a blur overlay immediately) and cleared once the
+   *  upload resolves. Distinct from the persisted `config.model_media_id`
+   *  (which only updates after the POST completes) so the UI can
+   *  show "what's being uploaded" vs "what's saved". */
+  modelUploadingFile: { previewUrl: string; filename: string } | null;
   /** True while POST /generation-mode/products is in flight. */
   uploadingProducts: boolean;
   /** True while POST /generation-mode/prompt/auto is in flight. */
@@ -109,6 +118,30 @@ async function readError(res: Response): Promise<string> {
   return `${res.status} ${res.statusText}`;
 }
 
+/**
+ * Read a `File` as a data: URL (base64-encoded). Used to back the
+ * optimistic per-tile thumbnail during an upload — the user sees
+ * their own selected image with a blur overlay while Flow ingests
+ * the bytes, instead of a generic spinner.
+ *
+ * Returns a string like `data:image/jpeg;base64,/9j/4AAQ...`. The
+ * browser garbage-collects the underlying ArrayBuffer when the
+ * FileReader emits; we don't need to revoke anything. The data
+ * URL stays alive only as long as the JS string ref does.
+ */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const r = reader.result;
+      if (typeof r === "string") resolve(r);
+      else reject(new Error("FileReader returned non-string"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export const useGenerationModeStore = create<GenerationModeState>((set, get) => ({
   boardId: null,
   config: null,
@@ -117,6 +150,7 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
   loading: false,
   generating: false,
   uploadingModel: false,
+  modelUploadingFile: null,
   uploadingProducts: false,
   autoPrompting: false,
   error: null,
@@ -160,7 +194,16 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
   async uploadModel(file) {
     const bid = get().boardId;
     if (bid === null) return;
-    set({ uploadingModel: true, error: null });
+    // Show the user's own file as a blurred preview IMMEDIATELY
+    // (no waiting for Flow's WS round-trip). Reads the file as a
+    // data: URL in parallel with the POST — both are bounded by
+    // the file size, the smaller of the two wins.
+    const previewUrl = await readFileAsBase64(file);
+    set({
+      uploadingModel: true,
+      modelUploadingFile: { previewUrl, filename: file.name },
+      error: null,
+    });
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -171,7 +214,13 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
       if (!res.ok) throw new Error(await readError(res));
       await get().refresh();
     } finally {
-      set({ uploadingModel: false });
+      // Keep the preview up for one tick so the blur-to-sharp
+      // transition is visible — refresh() has just set the new
+      // config.model_media_id, so React will swap the <img src>
+      // to the real URL on the next paint.
+      window.setTimeout(() => {
+        set({ uploadingModel: false, modelUploadingFile: null });
+      }, 250);
     }
   },
 
@@ -190,14 +239,17 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
     const arr = Array.from(files);
     if (arr.length === 0) return;
 
-    // Optimistically register one pending-tile per File with a local
-    // blob: URL so the user sees an immediate thumbnail + spinner per
-    // file. The URL is revoked when the entry is cleared below.
+    // Optimistically register one pending-tile per File with a
+    // base64 data: URL thumbnail so the user sees their own
+    // selected image with a blur overlay while Flow ingests the
+    // bytes. We resolve all data: URLs in parallel — the typical
+    // case is 1-4 files at a time, so Promise.all is plenty fast.
     const now = Date.now();
+    const dataUrls = await Promise.all(arr.map(readFileAsBase64));
     const optimistic: PendingUpload[] = arr.map((f, i) => ({
       clientId: `${now}-${i}-${f.name}`,
       filename: f.name,
-      previewUrl: URL.createObjectURL(f),
+      previewUrl: dataUrls[i],
       status: "uploading",
     }));
     set((s) => ({
@@ -258,11 +310,7 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
             (pu) => !stillUploading.has(pu.filename),
           ),
         }));
-        // Revoke blob URLs to free memory (we only needed them for
-        // the brief done-and-fading state).
-        for (const pu of optimistic) {
-          if (pu.previewUrl) URL.revokeObjectURL(pu.previewUrl);
-        }
+        // data: URLs are GC'd with the string refs — nothing to revoke.
       }, 1200);
     } catch (err) {
       // Bulk request itself failed (4xx/5xx with no body). Mark every
@@ -278,16 +326,14 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
         ),
         error: msg,
       }));
-      // Still revoke the blob URLs after a brief error-display window.
+      // Brief error-display window before removing the tile. data:
+      // URLs are GC'd with the string refs — nothing to revoke.
       window.setTimeout(() => {
         set((s) => ({
           pendingUploads: s.pendingUploads.filter(
             (pu) => !stillUploading.has(pu.filename),
           ),
         }));
-        for (const pu of optimistic) {
-          if (pu.previewUrl) URL.revokeObjectURL(pu.previewUrl);
-        }
       }, 3000);
     } finally {
       set({ uploadingProducts: false });

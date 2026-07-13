@@ -53,6 +53,16 @@ button:disabled {
   grid-template-columns: auto 1fr;
   height: 100vh;
   width: 100vw;
+  /* Exposed for the generation-mode action bar (position: fixed),
+   * which lives in the canvas-wrap column. The bar's `left` is
+   * this offset so it stays inside the canvas-wrap regardless of
+   * the viewport width. Sidebar toggles its width to 44px when
+   * collapsed; we mirror that here. */
+  --sidebar-width: 220px;
+}
+
+.app:has(.project-sidebar--collapsed) {
+  --sidebar-width: 44px;
 }
 
 /* ── Project sidebar (left) ─────────────────────────────────────────────── */
@@ -410,9 +420,17 @@ button:disabled {
  * the ReactFlow canvas mode. Generation mode's child explicitly opts
  * out of the clipping by taking the full remaining height and providing
  * its own vertical scrollbar (see .generation-board rule further down).
- * This rule keeps the parent from collapsing the child. */
+ * This rule keeps the parent from collapsing the child.
+ *
+ * In generate mode we ALSO drop `overflow: hidden` so the action bar
+ * (position: fixed at the bottom of the viewport) is not clipped by
+ * the canvas-wrap. ReactFlow does not depend on its parent clipping
+ * it, so this is safe — the canvas-mode layout is unaffected because
+ * the :has() selector only matches while a .generation-board is in
+ * the tree.
+ */
 .canvas-wrap:has(.generation-board) {
-  /* No style override needed; min-height on the child handles it. */
+  overflow: visible;
 }
 
 /* ── Canvas loading shim ────────────────────────────────────────────────── */
@@ -5494,12 +5512,11 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  /* Bottom padding is generous so the last row of the results
-   * gallery isn't permanently hidden under the sticky action bar
-   * when the user scrolls to the end. The bar itself docks 12px
-   * from the bottom; 96px here gives the last product card enough
-   * breathing room to read fully before the bar covers it. */
-  padding: 24px 32px 96px 32px;
+  /* Bottom padding leaves a small buffer under the last row of
+   * the results gallery so it isn't covered by the viewport-fixed
+   * action bar (which docks 12px from the viewport bottom and is
+   * itself ~58px tall). 80px of breathing room is enough. */
+  padding: 24px 32px 80px 32px;
   width: 100%;
   box-sizing: border-box;
   overflow-y: auto;
@@ -5632,12 +5649,43 @@ button:disabled {
   border: 1px solid var(--border, #34344a);
   background: #000;
   flex: 0 0 auto;
+  transition: filter 200ms ease, opacity 200ms ease;
+}
+
+/* While the model is being uploaded, the user sees their own
+ * selected file as the thumbnail (sourced from a data: URL), so we
+ * blur + dim it to mark the in-flight state — mirrors the per-tile
+ * blur on pending product uploads, just at a larger size. Once the
+ * POST completes, refresh() updates config.model_media_id and the
+ * .generation-board__model-thumb--uploading class is removed, so
+ * the image snaps to sharp + full opacity via the transition above.
+ */
+.generation-board__model-thumb--uploading {
+  filter: blur(10px);
+  opacity: 0.85;
+}
+
+/* The model-thumb's wrapping button is `position: relative` (from
+ * .generation-board__thumb-button), so absolutely positioning the
+ * spinner keeps it pinned to the visual centre of the thumbnail
+ * even when the blur transitions out underneath it. */
+.generation-board__thumb-button .generation-board__inline-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-width: 3px;
 }
 
 .generation-board__model-actions {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Fill the remaining width of .generation-board__model-preview (after the 110px thumb + gap). */
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .generation-board__model-hint {
@@ -5949,17 +5997,32 @@ button:disabled {
   word-break: break-word;
 }
 
-/* Action bar at the very end of the scrollable column. We don't
- * use position: sticky here because the parent generation-board is the
- * scroll container — `sticky` inside an `overflow-y: auto` parent only
- * pinned to the bottom of the products scroll viewport so the
- * "Tạo ảnh" button is always one click away -- no scrolling back
- * down after each round of edits. Sticky here works because
- * ``.generation-board`` is itself the scrolling container (overflow-y:
- * auto + flex column) and the action-bar is its child.
+/* Viewport-anchored action bar.
+ *
+ * Earlier this was `position: sticky` against the .generation-board
+ * scroll container -- that pinned the bar to the bottom of the
+ * products scroll viewport, so the "Tạo ảnh" button was always one
+ * click away. The user found that confusing: sticky on an inner
+ * container means the bar moves with the page on first scroll and
+ * then "sticks" to a different position than a true viewport-bottom
+ * bar would. They asked for fixed to the viewport instead.
+ *
+ * The wrapping `.canvas-wrap` is `overflow: hidden` for the canvas
+ * mode; for generate mode we override that to `overflow: visible` so
+ * this `position: fixed` bar isn't clipped. See the
+ * `.canvas-wrap:has(.generation-board)` rule above.
  */
 .generation-board__action-bar {
-  position: sticky;
+  position: fixed;
+  /* The bar lives in the canvas-wrap column (right of the sidebar),
+   * so its `left` must skip past the sidebar — see `--sidebar-width`
+   * on .app. The 16px right gutter mirrors the .generation-board
+   * padding so the bar's right edge aligns with the content area.
+   * Using `right: 16px` here (instead of `right: 16px` with a
+   * fixed left) means the bar automatically resizes with the
+   * viewport instead of overflowing. */
+  left: calc(var(--sidebar-width, 220px) + 16px);
+  right: 16px;
   bottom: 12px;
   z-index: 10;
   display: flex;
@@ -5969,17 +6032,15 @@ button:disabled {
   background: rgba(20, 20, 28, 0.92);
   border: 1px solid var(--border, #34344a);
   border-radius: 12px;
-  /* Soft glass so the gallery behind the sticky bar is still
-   * readable if the user happens to be on the last row when the bar
-   * docks to the bottom of the viewport. */
+  /* Soft glass so the gallery behind the bar is still readable if
+   * the user happens to be on the last row when the bar docks to
+   * the bottom of the viewport. */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   /* Drop-shadow upward so the bar visually floats over the gallery
    * rather than feeling like a chunk of opaque rectangle stuck to
    * the page. */
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
-  margin-top: 6px;
-  margin-bottom: 4px;
 }
 
 .generation-board__progress {
@@ -6240,7 +6301,23 @@ button.generation-board__thumb-button:hover {
 }
 
 .generation-board__pending-tile .generation-board__product-thumb img {
-  filter: brightness(0.85);
+  /* The user's own file is being uploaded to Flow right now. We
+   * blur + dim it so the in-flight state is obvious at a glance
+   * -- the user has the same image in the file picker they
+   * opened, so there's no information loss from the blur; we just
+   * mark it as "not done yet". The blur eases out in
+   * .generation-board__pending-tile--done below. */
+  filter: blur(10px);
+  opacity: 0.85;
+  transition: filter 200ms ease, opacity 200ms ease;
+}
+
+.generation-board__pending-tile--done .generation-board__product-thumb img {
+  /* Done: snap back to sharp + full opacity before the tile is
+   * replaced by the real product. The 200ms transition is short
+   * enough that the user perceives it as the upload "resolving". */
+  filter: blur(0);
+  opacity: 1;
 }
 
 .generation-board__pending-tile-pill--uploading {

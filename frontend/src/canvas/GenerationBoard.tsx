@@ -62,6 +62,7 @@ export function GenerationBoard() {
   const generating = useGenerationModeStore((s) => s.generating);
   const error = useGenerationModeStore((s) => s.error);
   const uploadingModel = useGenerationModeStore((s) => s.uploadingModel);
+  const modelUploadingFile = useGenerationModeStore((s) => s.modelUploadingFile);
   const uploadingProducts = useGenerationModeStore((s) => s.uploadingProducts);
   const autoPrompting = useGenerationModeStore((s) => s.autoPrompting);
   const autoPrompt = useGenerationModeStore((s) => s.autoPrompt);
@@ -86,6 +87,11 @@ export function GenerationBoard() {
   /** Full-viewport preview: when non-null, the ImagePreviewModal renders
    *  over the page with this media id. Click any image tile to set. */
   const [previewMediaId, setPreviewMediaId] = useState<string | null>(null);
+  /** Direct data: URL for the preview modal — used by the model
+   *  upload in-flight preview where there's no Flow media_id yet.
+   *  Mutually exclusive with `previewMediaId`; the modal renders
+   *  whichever is set. */
+  const [previewBase64, setPreviewBase64] = useState<string | null>(null);
   const [previewAlt, setPreviewAlt] = useState<string | undefined>(undefined);
 
   // Track when the latest in-flight batch started so we can compute
@@ -199,8 +205,23 @@ export function GenerationBoard() {
   }
 
   const hasModel = Boolean(config.model_media_id);
+
+  // "Pending" products: those whose latest GenerationResult is NOT
+  // ``done``. They're the next-batch candidates for the "Tạo ảnh"
+  // button: freshly-uploaded products (no row yet) AND any product
+  // that previously failed or is mid-cycle. Already-done products
+  // are intentionally excluded so clicking "Tạo ảnh" only ever
+  // enqueues NEW work -- the user can hit per-product "⟳" to retry
+  // an individual one.
+  const pendingCount = useMemo(() => {
+    return products.filter((p) => {
+      const r = results[p.id];
+      return !r || r.status !== "done";
+    }).length;
+  }, [products, results]);
+
   const canGenerate =
-    hasModel && products.length > 0 && !generating && inFlightCount === 0;
+    hasModel && pendingCount > 0 && !generating && inFlightCount === 0;
 
   return (
     <div className="generation-board">
@@ -239,26 +260,50 @@ export function GenerationBoard() {
               if (f) onModelUpload(f);
             }}
           >
-            {hasModel ? (
+            {hasModel || modelUploadingFile ? (
               <div className="generation-board__model-preview">
                 <button
                   type="button"
                   className="generation-board__thumb-button"
                   onClick={() => {
-                    setPreviewAlt("Ảnh model");
-                    setPreviewMediaId(config.model_media_id);
+                    // While uploading, the media isn't yet in the
+                    // gallery; show the in-flight base64 preview
+                    // instead. After the upload completes,
+                    // config.model_media_id is set and this branch
+                    // reverts to opening the persisted image.
+                    if (modelUploadingFile) {
+                      setPreviewAlt("Ảnh model đang upload");
+                      setPreviewMediaId(null);
+                      setPreviewBase64(modelUploadingFile.previewUrl);
+                    } else if (config.model_media_id) {
+                      setPreviewBase64(null);
+                      setPreviewAlt("Ảnh model");
+                      setPreviewMediaId(config.model_media_id);
+                    }
                   }}
                   aria-label="Xem ảnh model lớn"
                   title="Bấm để xem lớn"
                 >
                   <img
-                    src={mediaUrl(config.model_media_id as string)}
+                    src={
+                      modelUploadingFile
+                        ? modelUploadingFile.previewUrl
+                        : mediaUrl(config.model_media_id as string)
+                    }
                     alt="Ảnh model"
                     className={
                       "generation-board__model-thumb" +
-                      (uploadingModel ? " generation-board__thumb--loading" : "")
+                      (modelUploadingFile
+                        ? " generation-board__model-thumb--uploading"
+                        : "")
                     }
                   />
+                  {modelUploadingFile && (
+                    <span
+                      className="generation-board__inline-spinner"
+                      aria-label="Đang upload model"
+                    />
+                  )}
                 </button>
                 <div className="generation-board__model-actions">
                   <button
@@ -270,7 +315,7 @@ export function GenerationBoard() {
                     {uploadingModel ? "Đang upload…" : "Thay ảnh"}
                   </button>
                   <span className="generation-board__model-hint">
-                    Ảnh model — neo danh tính cho mọi ảnh phía dưới.
+                    Ảnh Người Mẫu
                   </span>
                 </div>
                 <input
@@ -518,9 +563,11 @@ export function GenerationBoard() {
 
       <ImagePreviewModal
         mediaId={previewMediaId}
+        previewSrc={previewBase64}
         alt={previewAlt}
         onClose={() => {
           setPreviewMediaId(null);
+          setPreviewBase64(null);
           setPreviewAlt(undefined);
         }}
       />
@@ -528,9 +575,11 @@ export function GenerationBoard() {
       <div className="generation-board__action-bar">
         <div className="generation-board__progress">
           {inFlightCount > 0
-            ? `Đang tạo ${inFlightCount}/${products.length}…`
+            ? `Đang tạo ${inFlightCount}…`
+            : pendingCount > 0
+            ? `${pendingCount} ảnh mới sẵn sàng để tạo`
             : products.length > 0
-            ? `${products.length} sản phẩm đã sẵn sàng`
+            ? `Tất cả ${products.length} ảnh đã hoàn thành`
             : "Chưa có ảnh sản phẩm nào"}
         </div>
         <button
@@ -538,11 +587,16 @@ export function GenerationBoard() {
           className="project-modal__btn project-modal__btn--primary"
           onClick={() => startGeneration()}
           disabled={!canGenerate}
+          title={pendingCount === 0
+            ? "Tất cả ảnh đã hoàn thành — bấm 'Tạo lại' trên từng ảnh để chạy lại"
+            : `Tạo ảnh cho ${pendingCount} sản phẩm mới (đã tạo rồi giữ nguyên)`}
         >
           {generating
             ? "Đang gửi…"
             : inFlightCount > 0
             ? `Đang tạo (${inFlightCount})`
+            : pendingCount > 0
+            ? `Tạo ${pendingCount} ảnh mới`
             : "Tạo ảnh"}
         </button>
       </div>

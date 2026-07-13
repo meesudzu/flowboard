@@ -1253,3 +1253,146 @@ def test_upload_products_dispatches_in_parallel_with_bounded_concurrency(client)
 
 # Helper for the constants lookup in the parallel-upload test above.
 from flowboard.routes.generation_mode import _MAX_UPLOAD_CONCURRENCY
+
+
+@pytest.mark.parametrize("body", [{}, None])
+def test_generic_generate_skips_already_done_products(client, body):
+    """After a successful round, the user uploads another product and
+    clicks ``Tạo ảnh``. The endpoint must dispatch a request ONLY for
+    the new (undone) product -- the already-done ones keep their
+    "Xong" pill instead of getting reset to "đang tạo".
+
+    Regression test for the user's complaint that every click reset
+    every product to the in-flight state.
+    """
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct, GenerationResult
+    from sqlmodel import select as _select
+
+    b = _seed_board_with_products(client, n_products=2)
+    bid = b["id"]
+
+    # Mark the first product "done" via the DB (matching what the
+    # worker would write after a real Flow call); the second stays
+    # undelivered.
+    with get_session() as s:
+        prod_rows = sorted(
+            s.exec(_select(GenerationProduct).where(
+                GenerationProduct.board_id == bid
+            )).all(),
+            key=lambda p: p.position,
+        )
+        # Capture the ids while the session is still open -- accessing
+        # ``prod_rows[N].id`` later would trigger a refresh on a
+        # detached instance.
+        done_product_id = prod_rows[0].id
+        pending_product_id = prod_rows[1].id
+        s.add(GenerationResult(
+            board_id=bid,
+            product_id=done_product_id,
+            output_media_id="abc11111-aaaa-aaaa-aaaa-111111111111",
+            status="done",
+        ))
+        s.commit()
+
+    # User clicks "Tạo ảnh" -- no body (or empty body).
+    body_json = body if body is not None else {}
+    r = client.post(
+        f"/api/boards/{bid}/generation-mode/generate",
+        json=body_json,
+    )
+    assert r.status_code == 200, r.text
+    body_resp = r.json()
+
+    # Only the undelivered product (#2) gets dispatched -- the done
+    # product (#1) is left alone. Look at the Request rows directly
+    # to assert which products the route actually enqueued.
+    from flowboard.db.models import Request as _Request
+    with get_session() as s:
+        req_rows = s.exec(_select(_Request).where(
+            _Request.id.in_(body_resp["request_ids"])
+        )).all()
+        dispatched = sorted(
+            item["product_id"]
+            for req in req_rows
+            for item in req.params.get("items", [])
+        )
+        if len(req_rows) == 1 and req_rows[0].type == "gen_image_product":
+            # Single-product path uses ``product_id`` directly, not ``items``.
+            dispatched = sorted(r.params["product_id"] for r in req_rows)
+        assert dispatched == [pending_product_id], (
+            f"expected ONLY the un-done product ({pending_product_id}) to be "
+            f"dispatched; got {dispatched}"
+        )
+
+    # The already-done product's latest result MUST still be "done",
+    # not "pending" / "running". Verify by fetching the gallery
+    # representation through the route endpoint -- the latest
+    # GenerationResult for product #1 should still report
+    # output_media_id + status="done" (no new pending row created).
+    with get_session() as s:
+        done_row = s.exec(_select(GenerationResult).where(
+            (GenerationResult.board_id == bid)
+            & (GenerationResult.product_id == done_product_id)
+        ).order_by(GenerationResult.created_at.desc())).first()
+        assert done_row is not None
+        assert done_row.status == "done"
+        assert done_row.output_media_id == "abc11111-aaaa-aaaa-aaaa-111111111111"
+
+
+def test_explicit_product_ids_bypasses_done_filter(client):
+    """If the caller passes an explicit ``product_ids`` list (e.g. for
+    a future bulk-regenerate endpoint), every listed product is
+    dispatched regardless of any existing done rows.
+    """
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct, GenerationResult
+    from sqlmodel import select as _select
+
+    b = _seed_board_with_products(client, n_products=2)
+    bid = b["id"]
+
+    # Mark both as done.
+    with get_session() as s:
+        prods = s.exec(_select(GenerationProduct).where(
+            GenerationProduct.board_id == bid
+        )).all()
+        done_ids = []
+        for p in prods:
+            s.add(GenerationResult(
+                board_id=bid,
+                product_id=p.id,
+                output_media_id=f"abc11111-aaaa-aaaa-aaaa-{p.id:04d}",
+                status="done",
+            ))
+            done_ids.append(p.id)
+        s.commit()
+
+    # Explicit list of both -> both get new pending rows even though
+    # they were already done.
+    r = client.post(
+        f"/api/boards/{bid}/generation-mode/generate",
+        json={"product_ids": done_ids},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["request_ids"]) >= 1
+    # The new pending rows are recorded alongside the original done
+    # rows; the gallery's "latest per product" picks up the new
+    # pending row (created_at DESC).
+    with get_session() as s:
+        # Total result rows for each product = 2 (original done +
+        # newly created pending). Both have status that isn't "done"
+        # immediately -- one is "done" (oldest), one is "pending"
+        # (newest).
+        for pid in done_ids:
+            rows = sorted(
+                s.exec(_select(GenerationResult).where(
+                    (GenerationResult.board_id == bid)
+                    & (GenerationResult.product_id == pid)
+                )).all(),
+                key=lambda r: r.created_at,
+                reverse=True,
+            )
+            assert rows[0].status == "pending"
+            assert rows[1].status == "done"

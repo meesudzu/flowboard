@@ -32,6 +32,11 @@ services:
       # main.py's guard rail allows 0.0.0.0 when it detects /.dockerenv.
       FLOWBOARD_WS_HOST: 0.0.0.0
       FLOWBOARD_RUN_IN_CONTAINER: "1"
+      # Optional HTTP Basic auth (see .env.example). Empty by
+      # default; set both in .env to enable the gate. Public paths
+      # (/api/health, /api/ext/callback, WS upgrade) always pass.
+      FLOWBOARD_BASIC_AUTH_USER: ${FLOWBOARD_BASIC_AUTH_USER:-}
+      FLOWBOARD_BASIC_AUTH_PASSWORD: ${FLOWBOARD_BASIC_AUTH_PASSWORD:-}
     volumes:
       - storage:/srv/storage
       - secrets:/srv/secrets

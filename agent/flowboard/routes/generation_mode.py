@@ -684,13 +684,49 @@ def enqueue_generation(board_id: int, body: GenerateBody):
                     f"unknown product_ids for this board: {sorted(missing)}",
                 )
         else:
-            products = list(
+            # Generic "Tạo ảnh" click -- dispatch only products that
+            # have NOT yet been generated. Done products keep their
+            # "Xong" pill instead of being reset to "đang tạo". The
+            # user can still re-run an individual product via its
+            # ⟳ icon (POST /products/{pid}/regenerate).
+            #
+            # "Has been generated" means: there's at least one
+            # GenerationResult row for the product, and the LATEST
+            # row's status is ``done``. Latest-not-done covers cases
+            # where a product was tried and failed (status "failed")
+            # -- those re-enter the dispatch pool so the next
+            # "Tạo ảnh" retries them, which matches the gallery's
+            # "Lỗi" affordance.
+            from sqlmodel import func as _func
+            from flowboard.db.models import GenerationResult as _GR
+
+            all_products = list(
                 s.exec(
                     select(GenerationProduct)
                     .where(GenerationProduct.board_id == board_id)
                     .order_by(GenerationProduct.position.asc())
                 ).all()
             )
+            # Compute the latest result per product directly in SQL so
+            # the filter is a single round-trip even on boards with
+            # thousands of historical rows.
+            latest_done_subq = (
+                select(
+                    _GR.product_id,
+                    _func.max(_GR.created_at).label("max_created"),
+                )
+                .where(_GR.board_id == board_id)
+                .where(_GR.status == "done")
+                .group_by(_GR.product_id)
+                .subquery()
+            )
+            done_product_ids = {
+                pid for pid in s.exec(
+                    select(latest_done_subq.c.product_id)
+                ).all()
+                if pid is not None
+            }
+            products = [p for p in all_products if p.id not in done_product_ids]
         product_ids = [p.id for p in products]
 
     if len(product_ids) <= 1:

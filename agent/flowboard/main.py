@@ -104,6 +104,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Optional HTTP Basic auth. The middleware factory is a no-op when
+# both FLOWBOARD_BASIC_AUTH_USER and FLOWBOARD_BASIC_AUTH_PASSWORD
+# are unset, so this call is safe to leave in place for every
+# install. Path/header allowlist (health, ext/callback, WS
+# upgrade) keeps the extension and uptime monitors reachable.
+# See ``flowboard/middleware/basic_auth.py`` for the full rule.
+from flowboard.middleware.basic_auth import make_basic_auth_middleware  # noqa: E402
+app.add_middleware(make_basic_auth_middleware)
+
 app.include_router(boards.router)
 app.include_router(nodes.router)
 app.include_router(edges.router)
