@@ -3,8 +3,9 @@ import type { GenerationProduct } from "../store/generationModeStore";
 
 interface ProductPromptModalProps {
   product: GenerationProduct | null;
-  /** Shared config prompt — shown as a placeholder so the user can
-   *  see the default they're overriding. */
+  /** Shared config prompt — used as the textarea's initial value
+   *  when the product has no override yet, and as a placeholder
+   *  for reference. */
   defaultPrompt: string;
   onClose: () => void;
   /** Persist the override (or the cleared-string when the user
@@ -15,14 +16,22 @@ interface ProductPromptModalProps {
 /**
  * Small modal for editing a single product's prompt override.
  *
- * Lives alongside the product tile's "✎" icon. Open -> user types
- * (or clears) -> clicks "Lưu" -> the store PATCHes the row and the
- * render flips the icon to "filled" so the user can see at a
- * glance which products diverge from the shared prompt.
+ * Lives alongside the product tile's "✎" icon. Open -> user
+ * edits (or clears) -> clicks the primary button -> the store
+ * PATCHes the row and the render flips the icon to "filled"
+ * so the user can see at a glance which products diverge from
+ * the shared prompt.
  *
- * The textarea shows the shared prompt as a placeholder so the
- * user can read the default without leaving the modal. Esc and
- * the × button both close without saving.
+ * Pre-fill behavior: when the product has NO existing override
+ * the textarea is pre-filled with the CURRENT shared config
+ * prompt (whatever the user has typed in the input above).
+ * The user is in "duplicate-and-tweak" mode — they can edit
+ * a single line and click Save to make that product diverge
+ * from the default, without retyping or copy-pasting the
+ * whole shared prompt. The placeholder still shows the
+ * shared prompt underneath as a reminder of the default.
+ *
+ * Esc and the × button both close without saving.
  */
 export function ProductPromptModal({
   product,
@@ -36,22 +45,24 @@ export function ProductPromptModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset the local draft when the modal target changes (open
-  // for a different product). Also auto-focus the textarea so
-  // the user can start typing immediately.
+  // for a different product) OR when the shared prompt changes
+  // (e.g. the user typed in the input above while the modal was
+  // open, then opened it for another product and the snapshot
+  // would be stale). Auto-focus the textarea.
   useEffect(() => {
     if (product === null) return;
-    setValue(product.prompt_override);
+    const initial =
+      product.prompt_override.length > 0 ? product.prompt_override : defaultPrompt;
+    setValue(initial);
     setError(null);
     setSaving(false);
     // Defer to next paint so the textarea is mounted.
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
-      textareaRef.current?.setSelectionRange(
-        product.prompt_override.length,
-        product.prompt_override.length,
-      );
+      const end = initial.length;
+      textareaRef.current?.setSelectionRange(end, end);
     });
-  }, [product]);
+  }, [product, defaultPrompt]);
 
   // Esc closes without saving.
   useEffect(() => {
@@ -69,16 +80,50 @@ export function ProductPromptModal({
   if (product === null) return null;
 
   const trimmed = value.trim();
-  // \"Use override\" iff non-empty. Empty string falls back to the
-  // shared config prompt, so the button label switches between
-  // \"Lưu override\" and \"Xoá override\" accordingly.
-  const willOverride = trimmed.length > 0;
+  // Three orthogonal booleans drive the button + hint labels.
+  // Previously we conflated "empty" and "same as shared"; now
+  // we expose all three so the user sees the right action.
+  const isEmpty = trimmed.length === 0;
+  const isSameAsShared = trimmed === defaultPrompt;
   const wasOverridden = product.prompt_override.length > 0;
 
+  // Save action: do we actually need to PATCH the row?
+  //   * empty + no override  -> nothing to save, just close
+  //   * same as shared + no override -> nothing to save
+  //   * otherwise (modified OR clearing an existing override) -> save
+  const needsSave = wasOverridden
+    ? !isSameAsShared // clear OR modify
+    : !isEmpty && !isSameAsShared; // create new override
+
+  // Primary button label. Picks the verb that best matches the
+  // user's intent given the current textarea state.
+  const saveLabel = isEmpty
+    ? wasOverridden
+      ? "Xoá override"
+      : "Đóng"
+    : isSameAsShared
+    ? wasOverridden
+      ? "Khôi phục shared"
+      : "Đóng"
+    : wasOverridden
+    ? "Lưu thay đổi"
+    : "Lưu override";
+
   const onSubmit = async () => {
+    if (!needsSave) {
+      // No PATCH needed: the user either cleared (no prior
+      // override to clear) or left the textarea matching the
+      // shared prompt. Just close.
+      onClose();
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
+      // Empty trimmed means "clear the override"; the store
+      // accepts an empty string and persists it as "" (whitespace
+      // is normalised on the server). We pass the raw trimmed
+      // value so the backend can echo it back.
       await onSave(product.id, trimmed);
       onClose();
     } catch (e) {
@@ -117,11 +162,15 @@ export function ProductPromptModal({
           </button>
         </div>
         <p className="product-prompt-modal__hint">
-          {willOverride
-            ? "Prompt này sẽ THAY THẾ prompt chung ở panel trên cho riêng sản phẩm này."
-            : wasOverridden
-            ? "Để trống để dùng lại prompt chung ở panel trên."
-            : "Để trống để dùng prompt chung. Prompt dưới đây chỉ áp dụng cho sản phẩm này."}
+          {isEmpty
+            ? wasOverridden
+              ? "Để trống và lưu để xoá override — sản phẩm sẽ quay lại dùng prompt chung."
+              : "Để trống và đóng — sản phẩm giữ nguyên dùng prompt chung."
+            : isSameAsShared
+            ? wasOverridden
+              ? "Nội dung giống prompt chung — lưu để xoá override và quay lại mặc định."
+              : "Nội dung giống prompt chung — không cần lưu, có thể đóng hoặc sửa để tạo override."
+            : "Prompt này sẽ THAY THẾ prompt chung cho riêng sản phẩm này."}
         </p>
         <textarea
           ref={textareaRef}
@@ -151,13 +200,7 @@ export function ProductPromptModal({
             onClick={onSubmit}
             disabled={saving}
           >
-            {saving
-              ? "Đang lưu…"
-              : willOverride
-              ? "Lưu override"
-              : wasOverridden
-              ? "Xoá override"
-              : "Lưu"}
+            {saving ? "Đang lưu…" : saveLabel}
           </button>
         </div>
       </div>

@@ -489,8 +489,8 @@ export function GenerationBoard() {
             {uploadingProducts && (
               <span
                 className="generation-board__inline-spinner"
-                aria-label="Đang upload"
-                title="Đang upload"
+                aria-label="Uploading"
+                title="Uploading"
               />
             )}
           </h2>
@@ -916,7 +916,7 @@ function PendingUploadTile({
           }
         >
           {upload.status === "uploading"
-            ? "Đang upload"
+            ? "Uploading"
             : upload.status === "failed"
             ? "Lỗi"
             : "Xong"}
