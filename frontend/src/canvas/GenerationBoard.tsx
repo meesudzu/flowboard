@@ -196,6 +196,27 @@ export function GenerationBoard() {
     [addProducts],
   );
 
+  // "Pending" products: those whose latest GenerationResult is NOT
+  // ``done``. They're the next-batch candidates for the "Tạo ảnh"
+  // button: freshly-uploaded products (no row yet) AND any product
+  // that previously failed or is mid-cycle. Already-done products
+  // are intentionally excluded so clicking "Tạo ảnh" only ever
+  // enqueues NEW work -- the user can hit per-product "⟳" to retry
+  // an individual one.
+  //
+  // NOTE: this ``useMemo`` MUST live above the loading/early-return
+  // branch below. Putting it after the return flips the hook count
+  // between renders (``loading`` toggles true→false on every load),
+  // which trips React #310 ("Rendered fewer hooks than expected")
+  // and crashes the page. The memo only reads ``products`` and
+  // ``results`` so it's safe to run before ``config`` is hydrated.
+  const pendingCount = useMemo(() => {
+    return products.filter((p) => {
+      const r = results[p.id];
+      return !r || r.status !== "done";
+    }).length;
+  }, [products, results]);
+
   if (boardId === null || loading || config === null) {
     return (
       <div className="generation-board">
@@ -205,20 +226,6 @@ export function GenerationBoard() {
   }
 
   const hasModel = Boolean(config.model_media_id);
-
-  // "Pending" products: those whose latest GenerationResult is NOT
-  // ``done``. They're the next-batch candidates for the "Tạo ảnh"
-  // button: freshly-uploaded products (no row yet) AND any product
-  // that previously failed or is mid-cycle. Already-done products
-  // are intentionally excluded so clicking "Tạo ảnh" only ever
-  // enqueues NEW work -- the user can hit per-product "⟳" to retry
-  // an individual one.
-  const pendingCount = useMemo(() => {
-    return products.filter((p) => {
-      const r = results[p.id];
-      return !r || r.status !== "done";
-    }).length;
-  }, [products, results]);
 
   const canGenerate =
     hasModel && pendingCount > 0 && !generating && inFlightCount === 0;
