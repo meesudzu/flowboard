@@ -12,6 +12,11 @@ def _utcnow() -> datetime:
 class Board(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
+    # Board mode controls which UI surface the App renders:
+    #   - "canvas"   (default) — the existing React Flow canvas with nodes/edges
+    #   - "generate"           — the new image-generation mode with no nodes
+    # Mode is immutable post-create in v1; converting requires delete+recreate.
+    mode: str = "canvas"
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -63,13 +68,13 @@ class Request(SQLModel, table=True):
 
 class Asset(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    # node_id is optional — assets can arrive from TRPC before any node
+    # node_id is optional -- assets can arrive from TRPC before any node
     # binding (e.g. the user browses an old Flow project).
     node_id: Optional[int] = Field(default=None, foreign_key="node.id", index=True)
     kind: str  # image | video | thumbnail
     # Media id (the hex uuid from Google Flow). Unique so ingest can upsert.
     uuid_media_id: Optional[str] = Field(default=None, index=True, unique=True)
-    # Latest captured signed GCS URL (expires — refreshed when user reopens
+    # Latest captured signed GCS URL (expires -- refreshed when user reopens
     # Flow tab).
     url: Optional[str] = None
     local_path: Optional[str] = None
@@ -80,7 +85,7 @@ class Asset(SQLModel, table=True):
 class MediaProjectMapping(SQLModel, table=True):
     """Cross-project media re-upload cache.
 
-    Flow scopes mediaIds to the project they were uploaded in — a
+    Flow scopes mediaIds to the project they were uploaded in -- a
     ref_media_id from project A is unknown to project B even though we
     have the bytes cached locally. When a dispatch needs to reference
     media from another project (e.g. a cross-board Reference reused on
@@ -90,7 +95,7 @@ class MediaProjectMapping(SQLModel, table=True):
 
     Each row says: "bytes of `original_media_id` are also available
     under `project_id` as `project_local_media_id`". Unique on
-    (original_media_id, project_id) — composite index in __table_args__.
+    (original_media_id, project_id) -- composite index in __table_args__.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     original_media_id: str = Field(index=True)
@@ -163,12 +168,91 @@ class PipelineRun(SQLModel, table=True):
     error: Optional[str] = None
 
 
+#: The default prompt template shown on every new generation-mode project.
+#: Module-level so tests can import + assert against it without parsing
+#: the SQLModel field default. Hoisted above the GenerationConfig class
+#: so the ``prompt: str = DEFAULT_GENERATION_PROMPT`` field default can
+#: reference it at class-definition time.
+DEFAULT_GENERATION_PROMPT = (
+    "Giữ chính xác thiết kế, màu sắc, chất liệu, logo, bao bì và các chi tiết nhận diện của sản phẩm từ ảnh gốc.\n"
+    "Bố cục: Người mẫu Đứng thẳng, hai tay khoanh nhẹ trước ngực tạo dáng tự nhiên, thể hiện sự tự tin và phong thái chuyên nghiệp. Ánh mắt nhìn thẳng vào ống kính với biểu cảm tự chủ và cuốn hút.\n"
+    "[Ảnh tham chiếu]: Ảnh đầu là sản phẩm. Ảnh sau là chân dung người mẫu được sử dụng làm hình ảnh tham khảo chính xác về bố cục, phong cách và cảm xúc.\n"
+    "[Lưu ý] có độ phân giải 4K, chi tiết cao, chân thực như ảnh chụp, giữ nguyên cấu trúc và chất liệu sản phẩm."
+)
+
+
+class GenerationConfig(SQLModel, table=True):
+    """1:1 with Board for projects in ``mode="generate"`` mode.
+
+    Stores the per-board generation configuration: which model image is
+    being used, the shared prompt text, aspect ratio, and image model
+    choice. One row per board; inserting twice is a programming error
+    (use the existing row).
+    """
+    board_id: int = Field(primary_key=True, foreign_key="board.id")
+    # The Flow-issued media id of the uploaded model image, set via
+    # POST /api/boards/{id}/generation-mode/model. None until the
+    # first upload completes.
+    model_media_id: Optional[str] = None
+    # Free-form user prompt describing background / pose / mood. Sent
+    # to Flow as part of the structuredPrompt for every per-product
+    # generation. New projects are seeded with DEFAULT_GENERATION_PROMPT
+    # (a Vietnamese lookbook template) so the textarea isn't empty --
+    # the user can overwrite via PATCH /config at any time.
+    prompt: str = DEFAULT_GENERATION_PROMPT
+    aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT"
+    image_model: str = "NANO_BANANA_PRO"
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class GenerationProduct(SQLModel, table=True):
+    """A product image uploaded into a generation-mode project.
+
+    Each row carries the Flow media id of the product image and a stable
+    ``position`` integer (assigned at upload time, monotonically
+    increasing) so the gallery renders in upload order without ORDER BY
+    RANDOM() or relying on ``created_at`` ties.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    board_id: int = Field(foreign_key="board.id", index=True)
+    media_id: str
+    position: int = 0
+    label: str = ""
+    uploaded_at: datetime = Field(default_factory=_utcnow)
+
+
+class GenerationResult(SQLModel, table=True):
+    """The output of one per-product generation run.
+
+    A product may have multiple GenerationResult rows over time (every
+    "regenerate" appends a new one). The frontend reads the *latest*
+    row per product when rendering the gallery, ordered by created_at DESC.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    board_id: int = Field(foreign_key="board.id", index=True)
+    product_id: int = Field(foreign_key="generationproduct.id", index=True)
+    # The Flow media id of the generated output image. None while pending/
+    # running; filled in by the worker on success. Reset when the user
+    # hits "regenerate" so stale outputs don't render next to new ones.
+    output_media_id: Optional[str] = None
+    # Exact prompt string sent to Flow for this run -- logged so the user
+    # can audit what was dispatched (important when LLM auto-prompt is
+    # wired in later).
+    prompt_used: str = ""
+    # pending | queued | running | done | failed | canceled -- mirrors the
+    # Request.status vocabulary so a single front-end filter can apply.
+    status: str = "pending"
+    error: Optional[str] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    finished_at: Optional[datetime] = None
+
+
 class BoardFlowProject(SQLModel, table=True):
     """1:1 link between a local board and a Google Flow project_id.
 
     Kept as a separate table so we don't have to migrate the Board schema.
     Paygate tier is loaded realtime from the extension via /api/auth/me,
-    not persisted here — the binding is purely about project identity.
+    not persisted here -- the binding is purely about project identity.
     """
     board_id: int = Field(primary_key=True, foreign_key="board.id")
     flow_project_id: str

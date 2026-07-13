@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Board } from "./canvas/Board";
+import { GenerationBoard } from "./canvas/GenerationBoard";
 import { AddNodePalette } from "./canvas/AddNodePalette";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
@@ -17,6 +18,7 @@ import { useGenerationStore } from "./store/generation";
 
 export function App() {
   const loadInitialBoard = useBoardStore((s) => s.loadInitialBoard);
+  const boardMode = useBoardStore((s) => s.boardMode);
   const loadReferences = useReferencesStore((s) => s.load);
   const loading = useBoardStore((s) => s.loading);
   const boardId = useBoardStore((s) => s.boardId);
@@ -43,17 +45,27 @@ export function App() {
       <ProjectSidebar />
       <ReactFlowProvider>
         <div className="canvas-wrap">
-          <Toolbar />
-          {loading && boardId === null ? (
-            <div className="canvas-loading">Loading board…</div>
+          {boardMode === "generate" ? (
+            loading && boardId === null ? (
+              <div className="canvas-loading">Loading board…</div>
+            ) : (
+              <GenerationBoard />
+            )
           ) : (
             <>
-              <Board />
-              <AddNodePalette />
+              <Toolbar />
+              {loading && boardId === null ? (
+                <div className="canvas-loading">Loading board…</div>
+              ) : (
+                <>
+                  <Board />
+                  <AddNodePalette />
+                </>
+              )}
+              <StatusBar />
             </>
           )}
-          <StatusBar />
-          <ReferencesPanel />
+          {boardMode !== "generate" && <ReferencesPanel />}
         </div>
       </ReactFlowProvider>
       {/* <ChatSidebar /> */}

@@ -1,0 +1,708 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  useGenerationModeStore,
+  type GenerationProduct,
+  type GenerationResult,
+} from "../store/generationModeStore";
+import { useBoardStore } from "../store/board";
+import { useSettingsStore, type ImageModelKey } from "../store/settings";
+import { mediaUrl } from "../api/client";
+import { ImagePreviewModal } from "../components/ImagePreviewModal";
+
+const PRODUCT_STATUS_LABEL: Record<string, string> = {
+  pending: "Đang chờ",
+  queued: "Trong hàng đợi",
+  running: "Đang tạo",
+  done: "Xong",
+  failed: "Lỗi",
+  canceled: "Đã huỷ",
+};
+
+const ASPECT_RATIOS = [
+  { key: "IMAGE_ASPECT_RATIO_SQUARE" as const, label: "1:1" },
+  { key: "IMAGE_ASPECT_RATIO_PORTRAIT" as const, label: "9:16" },
+  { key: "IMAGE_ASPECT_RATIO_LANDSCAPE" as const, label: "16:9" },
+];
+
+const IMAGE_MODEL_CHIPS: { key: ImageModelKey; label: string }[] = [
+  { key: "NANO_BANANA_PRO", label: "Premium" },
+  { key: "NANO_BANANA_2", label: "Fast" },
+];
+
+// Two-tier poll cadence while any result is in flight.
+//
+// We poll aggressively (1.5 s) for the first 30 seconds because that's
+// when the worker is most likely to flip the row to "done" -- a faster
+// tick makes the "Xong" pill appear within ~1-2 s of completion
+// rather than waiting up to 3 s.
+//
+// After 30 s of unbroken "in-flight" we relax to 5 s so a long Flow
+// dispatch doesn't cost us one HTTP call per second indefinitely. The
+// effective user-visible latency stays low because a completion flips
+// the cadence back to FAST on the next poll cycle (results change ->
+// useMemo recomputes -> the effect re-runs).
+const FAST_POLL_MS = 1_500;
+const SLOW_POLL_MS = 5_000;
+const FAST_WINDOW_MS = 30_000;
+
+export function GenerationBoard() {
+  const boardId = useBoardStore((s) => s.boardId);
+  const boardName = useBoardStore((s) => s.boardName);
+
+  const config = useGenerationModeStore((s) => s.config);
+  const products = useGenerationModeStore((s) => s.products);
+  const results = useGenerationModeStore((s) => s.results);
+  const loading = useGenerationModeStore((s) => s.loading);
+  const generating = useGenerationModeStore((s) => s.generating);
+  const error = useGenerationModeStore((s) => s.error);
+  const uploadingModel = useGenerationModeStore((s) => s.uploadingModel);
+  const uploadingProducts = useGenerationModeStore((s) => s.uploadingProducts);
+  const autoPrompting = useGenerationModeStore((s) => s.autoPrompting);
+  const autoPrompt = useGenerationModeStore((s) => s.autoPrompt);
+  const load = useGenerationModeStore((s) => s.load);
+  const refresh = useGenerationModeStore((s) => s.refresh);
+  const uploadModel = useGenerationModeStore((s) => s.uploadModel);
+  const addProducts = useGenerationModeStore((s) => s.addProducts);
+  const removeProduct = useGenerationModeStore((s) => s.removeProduct);
+  const updatePrompt = useGenerationModeStore((s) => s.updatePrompt);
+  const updateAspectRatio = useGenerationModeStore((s) => s.updateAspectRatio);
+  const updateImageModel = useGenerationModeStore((s) => s.updateImageModel);
+  const startGeneration = useGenerationModeStore((s) => s.startGeneration);
+  const regenerateProduct = useGenerationModeStore((s) => s.regenerateProduct);
+
+  const settingsImageModel = useSettingsStore((s) => s.imageModel);
+  const setSettingsImageModel = useSettingsStore((s) => s.setImageModel);
+
+  const [modelHover, setModelHover] = useState(false);
+  const [productsHover, setProductsHover] = useState(false);
+  const [showModelSizeHint, setShowModelSizeHint] = useState(false);
+  /** Full-viewport preview: when non-null, the ImagePreviewModal renders
+   *  over the page with this media id. Click any image tile to set. */
+  const [previewMediaId, setPreviewMediaId] = useState<string | null>(null);
+  const [previewAlt, setPreviewAlt] = useState<string | undefined>(undefined);
+
+  // Track when the latest in-flight batch started so we can compute
+  // the poll cadence per tick (FAST for the first 30s, SLOW after).
+  const inFlightStartedAtRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const productsInputRef = useRef<HTMLInputElement>(null);
+  const promptTimer = useRef<number | null>(null);
+
+  // Initial load when boardId changes; reset store on cleanup so
+  // switching boards doesn't leak state between them.
+  useEffect(() => {
+    if (boardId === null) return;
+    load(boardId);
+  }, [boardId, load]);
+
+  // Poll while any result is in flight.
+  const inFlightCount = useMemo(
+    () =>
+      Object.values(results).filter((r) =>
+        ["pending", "queued", "running"].includes(r.status),
+      ).length,
+    [results],
+  );
+  useEffect(() => {
+    if (boardId === null) return;
+    if (inFlightCount === 0) {
+      inFlightStartedAtRef.current = null;
+      return;
+    }
+    // First time we observe in-flight after a quiet period, anchor a
+    // fresh "started at" so the FAST cadence window restarts. When
+    // inFlightCount rises further (e.g. user clicks regenerate on a
+    // second product mid-batch) we keep the original anchor so the
+    // cadence doesn't reset.
+    if (inFlightStartedAtRef.current === null) {
+      inFlightStartedAtRef.current = Date.now();
+    }
+    const startedAt = inFlightStartedAtRef.current;
+    let cancelled = false;
+    let timer: number | undefined;
+    const tick = () => {
+      if (cancelled) return;
+      const elapsed = Date.now() - startedAt;
+      const interval = elapsed < FAST_WINDOW_MS ? FAST_POLL_MS : SLOW_POLL_MS;
+      refresh().catch(() => {});
+      timer = window.setTimeout(tick, interval);
+    };
+    timer = window.setTimeout(tick, FAST_POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [boardId, inFlightCount, refresh]);
+
+  // Debounce prompt typing so we don't hammer PATCH /config on every
+  // keystroke. 400 ms feels instant for the user but groups updates.
+  const onPromptChange = useCallback(
+    (next: string) => {
+      // Local echo immediately so the textarea reflects input.
+      const cfg = useGenerationModeStore.getState().config;
+      if (cfg) useGenerationModeStore.setState({ config: { ...cfg, prompt: next } });
+      if (promptTimer.current !== null) {
+        window.clearTimeout(promptTimer.current);
+      }
+      const bid = boardId;
+      if (bid === null) return;
+      promptTimer.current = window.setTimeout(() => {
+        updatePrompt(next).catch(() => {
+          // Restore the prior prompt on failure so the UI doesn't lie.
+          useGenerationModeStore.getState().refresh().catch(() => {});
+        });
+      }, 400);
+    },
+    [boardId, updatePrompt],
+  );
+
+  const onModelUpload = useCallback(
+    async (file: File) => {
+      try {
+        await uploadModel(file);
+      } catch (e) {
+        // Surface error inline; refresh so any stale state clears.
+        useGenerationModeStore.setState({
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [uploadModel],
+  );
+
+  const onProductsUpload = useCallback(
+    async (files: File[] | FileList) => {
+      try {
+        await addProducts(files);
+      } catch (e) {
+        useGenerationModeStore.setState({
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [addProducts],
+  );
+
+  if (boardId === null || loading || config === null) {
+    return (
+      <div className="generation-board">
+        <div className="generation-board__loading">Đang tải…</div>
+      </div>
+    );
+  }
+
+  const hasModel = Boolean(config.model_media_id);
+  const canGenerate =
+    hasModel && products.length > 0 && !generating && inFlightCount === 0;
+
+  return (
+    <div className="generation-board">
+      <header className="generation-board__header">
+        <div className="generation-board__title-row">
+          <h1 className="generation-board__title">{boardName || "Dự án"}</h1>
+          <span className="generation-board__mode-badge" aria-label="Chế độ tạo ảnh">
+            Tạo ảnh
+          </span>
+        </div>
+        {error && (
+          <div className="generation-board__error" role="alert">
+            {error}
+          </div>
+        )}
+      </header>
+
+      <section className="generation-board__input-row">
+        {/* ── Model column (left) ───────────────────────────────────── */}
+        <div className="generation-board__input-col generation-board__input-col--model">
+          <div
+            className={
+              "generation-board__model-drop" +
+              (modelHover ? " generation-board__drop--hover" : "") +
+              (hasModel ? " generation-board__drop--filled" : "")
+            }
+            onDragOver={(e) => {
+              e.preventDefault();
+              setModelHover(true);
+            }}
+            onDragLeave={() => setModelHover(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setModelHover(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) onModelUpload(f);
+            }}
+          >
+            {hasModel ? (
+              <div className="generation-board__model-preview">
+                <button
+                  type="button"
+                  className="generation-board__thumb-button"
+                  onClick={() => {
+                    setPreviewAlt("Ảnh model");
+                    setPreviewMediaId(config.model_media_id);
+                  }}
+                  aria-label="Xem ảnh model lớn"
+                  title="Bấm để xem lớn"
+                >
+                  <img
+                    src={mediaUrl(config.model_media_id as string)}
+                    alt="Ảnh model"
+                    className={
+                      "generation-board__model-thumb" +
+                      (uploadingModel ? " generation-board__thumb--loading" : "")
+                    }
+                  />
+                </button>
+                <div className="generation-board__model-actions">
+                  <button
+                    type="button"
+                    className="project-modal__btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingModel}
+                  >
+                    {uploadingModel ? "Đang upload…" : "Thay ảnh"}
+                  </button>
+                  <span className="generation-board__model-hint">
+                    Ảnh model — neo danh tính cho mọi ảnh phía dưới.
+                  </span>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onModelUpload(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="generation-board__drop-empty"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingModel}
+              >
+                {uploadingModel && (
+                  <span className="generation-board__inline-spinner" aria-hidden="true" />
+                )}
+                <span className="generation-board__drop-icon" aria-hidden="true">＋</span>
+                <span className="generation-board__drop-title">Upload ảnh model</span>
+                <span className="generation-board__drop-desc">
+                  1 ảnh chân dung hoặc figure rõ mặt — neo danh tính xuyên suốt cả lookbook.
+                </span>
+                <span className="generation-board__drop-formats">JPG / PNG / WebP · tối đa 10 MB</span>
+                {showModelSizeHint && (
+                  <span className="generation-board__drop-error">
+                    File vượt quá 10 MB hoặc không đúng định dạng.
+                  </span>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      if (f.size > 10 * 1024 * 1024) {
+                        setShowModelSizeHint(true);
+                      } else {
+                        setShowModelSizeHint(false);
+                        onModelUpload(f);
+                      }
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Prompt column (right) ─────────────────────────────────── */}
+        <div className="generation-board__input-col generation-board__input-col--prompt">
+          <div className="generation-board__prompt-row">
+            <label className="generation-board__prompt-label" htmlFor="generation-prompt">
+              Prompt
+            </label>
+            <button
+              type="button"
+              className="project-modal__btn generation-board__autoprompt-btn"
+              onClick={async () => {
+                try {
+                  const fresh = await autoPrompt();
+                  await updatePrompt(fresh);
+                } catch (e) {
+                  useGenerationModeStore.setState({
+                    error: e instanceof Error ? e.message : String(e),
+                  });
+                }
+              }}
+              disabled={autoPrompting}
+              title="Dùng MiniMax viết lại prompt theo mẫu mặc định"
+            >
+              {autoPrompting ? "Đang tạo prompt…" : "Tự tạo prompt"}
+            </button>
+            <textarea
+              id="generation-prompt"
+              className="generation-board__prompt-input"
+              rows={6}
+              value={config.prompt}
+              placeholder="Mô tả bối cảnh, ánh sáng, tư thế, tâm trạng… áp dụng cho tất cả ảnh sản phẩm."
+              onChange={(e) => onPromptChange(e.target.value)}
+            />
+            <div className="generation-board__chips">
+              <span className="generation-board__chip-label">Tỉ lệ:</span>
+              {ASPECT_RATIOS.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  className={
+                    "generation-board__chip" +
+                    (config.aspect_ratio === a.key ? " generation-board__chip--active" : "")
+                  }
+                  onClick={() => updateAspectRatio(a.key).catch(() => {})}
+                >
+                  {a.label}
+                </button>
+              ))}
+              <span className="generation-board__chip-label">Model:</span>
+              {IMAGE_MODEL_CHIPS.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={
+                    "generation-board__chip" +
+                    ((config.image_model || settingsImageModel) === m.key
+                      ? " generation-board__chip--active"
+                      : "")
+                  }
+                  onClick={() => {
+                    setSettingsImageModel(m.key);
+                    updateImageModel(m.key).catch(() => {});
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        className={
+          "generation-board__products" +
+          (productsHover ? " generation-board__drop--hover" : "")
+        }
+        onDragOver={(e) => {
+          e.preventDefault();
+          setProductsHover(true);
+        }}
+        onDragLeave={() => setProductsHover(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setProductsHover(false);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (files.length > 0) onProductsUpload(files);
+        }}
+      >
+        <div className="generation-board__products-header">
+          <h2 className="generation-board__subtitle">
+            Ảnh sản phẩm ({products.length})
+            {uploadingProducts && (
+              <span
+                className="generation-board__inline-spinner"
+                aria-label="Đang upload"
+                title="Đang upload"
+              />
+            )}
+          </h2>
+          <button
+            type="button"
+            className="project-modal__btn"
+            onClick={() => productsInputRef.current?.click()}
+            disabled={uploadingProducts}
+          >
+            {uploadingProducts ? "Đang upload…" : "+ Thêm sản phẩm"}
+          </button>
+          <input
+            ref={productsInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            multiple
+            onChange={(e) => {
+              const files = e.target.files ? Array.from(e.target.files) : [];
+              if (files.length > 0) onProductsUpload(files);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        {products.length === 0 ? (
+          <button
+            type="button"
+            className="generation-board__products-empty"
+            onClick={() => productsInputRef.current?.click()}
+            disabled={uploadingProducts}
+          >
+            <span className="generation-board__drop-icon" aria-hidden="true">＋</span>
+            <span>
+              {uploadingProducts
+                ? "Đang upload lên Flow…"
+                : "Thả ảnh sản phẩm vào đây (nhiều ảnh cùng lúc)"}
+            </span>
+          </button>
+        ) : (
+          <ul className="generation-board__product-grid">
+            {products.map((p) => (
+              <ProductTile
+                key={p.id}
+                product={p}
+                result={results[p.id]}
+                onRemove={() => {
+                  if (window.confirm("Xoá ảnh sản phẩm này? Kết quả tạo của nó cũng bị xoá.")) {
+                    removeProduct(p.id).catch(() => {});
+                  }
+                }}
+                onRegenerate={() => regenerateProduct(p.id).catch(() => {})}
+                onPreview={() => {
+                  setPreviewAlt(`Sản phẩm #${p.id}`);
+                  setPreviewMediaId(p.media_id);
+                }}
+              />
+            ))}
+            <li>
+              <button
+                type="button"
+                className="generation-board__product-add"
+                onClick={() => productsInputRef.current?.click()}
+                aria-label="Thêm sản phẩm"
+              >
+                ＋
+              </button>
+            </li>
+          </ul>
+        )}
+      </section>
+
+      <ResultsGallery
+        products={products}
+        results={results}
+        onRegenerate={(pid) => regenerateProduct(pid).catch(() => {})}
+        onPreviewProduct={(mid) => {
+          setPreviewAlt("Ảnh sản phẩm gốc");
+          setPreviewMediaId(mid);
+        }}
+        onPreviewOutput={(r) => {
+          setPreviewAlt(`Kết quả tạo ảnh #${r.product_id}`);
+          setPreviewMediaId(r.output_media_id);
+        }}
+      />
+
+      <ImagePreviewModal
+        mediaId={previewMediaId}
+        alt={previewAlt}
+        onClose={() => {
+          setPreviewMediaId(null);
+          setPreviewAlt(undefined);
+        }}
+      />
+
+      <div className="generation-board__action-bar">
+        <div className="generation-board__progress">
+          {inFlightCount > 0
+            ? `Đang tạo ${inFlightCount}/${products.length}…`
+            : products.length > 0
+            ? `${products.length} sản phẩm đã sẵn sàng`
+            : "Chưa có ảnh sản phẩm nào"}
+        </div>
+        <button
+          type="button"
+          className="project-modal__btn project-modal__btn--primary"
+          onClick={() => startGeneration()}
+          disabled={!canGenerate}
+        >
+          {generating
+            ? "Đang gửi…"
+            : inFlightCount > 0
+            ? `Đang tạo (${inFlightCount})`
+            : "Tạo ảnh"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProductTile({
+  product,
+  result,
+  onRemove,
+  onRegenerate,
+  onPreview,
+}: {
+  product: GenerationProduct;
+  result: GenerationResult | undefined;
+  onRemove: () => void;
+  onRegenerate: () => void;
+  onPreview: () => void;
+}) {
+  const status = result?.status;
+  const statusLabel = status ? PRODUCT_STATUS_LABEL[status] ?? status : null;
+  return (
+    <li className="generation-board__product-tile">
+      <button
+        type="button"
+        className="generation-board__thumb-button generation-board__product-thumb"
+        onClick={() => onPreview()}
+        aria-label="Xem ảnh sản phẩm lớn"
+        title="Bấm để xem lớn"
+      >
+        <img src={mediaUrl(product.media_id)} alt="Sản phẩm" />
+        {statusLabel && (
+          <span
+            className={
+              "generation-board__product-pill generation-board__product-pill--" +
+              (status ?? "idle")
+            }
+          >
+            {statusLabel}
+          </span>
+        )}
+      </button>
+      <div className="generation-board__product-actions">
+        <button
+          type="button"
+          className="generation-board__icon-btn"
+          onClick={onRegenerate}
+          aria-label="Tạo lại ảnh này"
+          title="Tạo lại ảnh này"
+        >
+          ⟳
+        </button>
+        <button
+          type="button"
+          className="generation-board__icon-btn generation-board__icon-btn--danger"
+          onClick={onRemove}
+          aria-label="Xoá ảnh sản phẩm"
+          title="Xoá ảnh sản phẩm"
+        >
+          ✕
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function ResultsGallery({
+  products,
+  results,
+  onRegenerate,
+  onPreviewProduct,
+  onPreviewOutput,
+}: {
+  products: GenerationProduct[];
+  results: Record<number, GenerationResult>;
+  onRegenerate: (productId: number) => void;
+  onPreviewProduct: (mediaId: string) => void;
+  onPreviewOutput: (result: GenerationResult) => void;
+}) {
+  if (products.length === 0) return null;
+  const anyResult = products.some((p) => results[p.id]);
+  if (!anyResult) {
+    return (
+      <section className="generation-board__gallery">
+        <h2 className="generation-board__subtitle">Kết quả</h2>
+        <p className="generation-board__gallery-hint">
+          Bấm <strong>Tạo ảnh</strong> để tạo ảnh cho từng sản phẩm.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="generation-board__gallery">
+      <h2 className="generation-board__subtitle">Kết quả</h2>
+      <ul className="generation-board__result-grid">
+        {products.map((p) => {
+          const r = results[p.id];
+          return (
+            <li key={p.id} className="generation-board__result-tile">
+              <div className="generation-board__result-pair">
+                <figure className="generation-board__result-side">
+                  <button
+                    type="button"
+                    className="generation-board__thumb-button generation-board__result-thumb"
+                    onClick={() => onPreviewProduct(p.media_id)}
+                    aria-label="Xem ảnh sản phẩm gốc lớn"
+                    title="Bấm để xem lớn"
+                  >
+                    <img src={mediaUrl(p.media_id)} alt="Sản phẩm gốc" />
+                  </button>
+                  <figcaption>Sản phẩm</figcaption>
+                </figure>
+                <figure className="generation-board__result-side">
+                  {r?.status === "done" && r.output_media_id ? (
+                    <button
+                      type="button"
+                      className="generation-board__thumb-button generation-board__result-thumb"
+                      onClick={() => onPreviewOutput(r)}
+                      aria-label="Xem ảnh kết quả lớn"
+                      title="Bấm để xem lớn"
+                    >
+                      <img src={mediaUrl(r.output_media_id)} alt="Kết quả tạo ảnh" />
+                    </button>
+                  ) : (
+                    <div className="generation-board__result-placeholder">
+                      {r?.status === "failed"
+                        ? "Lỗi"
+                        : r?.status === "running" || r?.status === "queued"
+                        ? "Đang tạo…"
+                        : r?.status === "pending"
+                        ? "Đang chờ"
+                        : "Chưa tạo"}
+                    </div>
+                  )}
+                  <figcaption>
+                    {r?.status === "done"
+                      ? `Xong ${r.finished_at ? formatTimestamp(r.finished_at) : ""}`
+                      : "Kết quả"}
+                  </figcaption>
+                </figure>
+              </div>
+              {r?.error && (
+                <div className="generation-board__result-error">{r.error}</div>
+              )}
+              {r?.status === "failed" && (
+                <button
+                  type="button"
+                  className="project-modal__btn"
+                  onClick={() => onRegenerate(p.id)}
+                >
+                  Thử lại
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function formatTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}

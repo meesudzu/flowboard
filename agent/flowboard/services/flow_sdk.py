@@ -872,16 +872,29 @@ class FlowSDK:
         character_media_ids: Optional[list[str]] = None,  # legacy alias
         prompts: Optional[list[str]] = None,
         image_model: Optional[str] = None,
+        # Optional per-variant reference images. When provided, len must
+        # equal variant_count; entry i is used as ``imageInputs`` for
+        # variant i. Useful when each variant in a batch is conditioned
+        # on a different reference (e.g. generation-mode: variant i
+        # uses model + product[i] as refs, instead of every variant
+        # sharing the same refs). ``ref_media_ids`` remains the default
+        # when this is missing/short.
+        ref_media_ids_per_variant: Optional[list[Optional[list[str]]]] = None,
     ) -> dict[str, Any]:
-        """Generate ``variant_count`` images (1-4). When ``ref_media_ids`` is
-        provided, every request item is augmented with ``imageInputs`` so Flow
-        conditions the result on those upstream images (any combination of
-        character / image / visual_asset upstream nodes — all become
-        ``IMAGE_INPUT_TYPE_REFERENCE`` inputs).
+        """Generate ``variant_count`` images (1-4). When ``ref_media_ids``
+        (or the legacy ``character_media_ids``) is provided, every request
+        item is augmented with ``imageInputs`` so Flow conditions the
+        result on those upstream images.
 
-        Multiple variants are produced by replicating the request item with
-        distinct seeds — Flow returns one entry in ``data.media[]`` per
-        request item.
+        Pass ``ref_media_ids_per_variant`` instead when each variant
+        should use a different reference set (e.g. one product image
+        per output). Each entry is a list of media ids; missing /
+        shorter lists fall through to the per-variant prompt fallback
+        and stay on the shared ``ref_media_ids`` set.
+
+        Multiple variants are produced by replicating the request item
+        with distinct seeds — Flow returns one entry in
+        ``data.media[]`` per request item.
 
         ``paygate_tier`` is required. See ``gen_video`` for rationale.
         """
@@ -893,12 +906,26 @@ class FlowSDK:
         model_name = resolve_image_model(image_model)
         # Accept the legacy `character_media_ids` kwarg as a fallback.
         merged_refs = ref_media_ids if ref_media_ids is not None else character_media_ids
-        image_inputs = None
-        if merged_refs:
-            image_inputs = [
+
+        def _to_inputs(refs: Optional[list[str]]) -> Optional[list[dict[str, str]]]:
+            if not refs:
+                return None
+            return [
                 {"name": mid, "imageInputType": "IMAGE_INPUT_TYPE_REFERENCE"}
-                for mid in merged_refs
+                for mid in refs
+                if isinstance(mid, str) and mid
             ]
+
+        # Per-variant shared refs (legacy path — every variant gets them).
+        shared_inputs = _to_inputs(merged_refs)
+        # Per-variant refs (new path — entry i used by variant i). When set
+        # we IGNORE the shared set entirely, since the per-variant list is
+        # the explicit one; this lets a caller opt in cleanly without
+        # having to repeat the shared refs in every entry.
+        use_per_variant = (
+            isinstance(ref_media_ids_per_variant, list)
+            and len(ref_media_ids_per_variant) > 0
+        )
 
         # Per-variant prompts: when the caller provides `prompts`, each
         # request_item gets its own text so the 4 variants render with
@@ -921,8 +948,17 @@ class FlowSDK:
                 "imageAspectRatio": aspect_ratio,
                 "imageModelName": model_name,
             }
-            if image_inputs is not None:
-                item["imageInputs"] = list(image_inputs)
+            if use_per_variant:
+                refs_i = (
+                    ref_media_ids_per_variant[i]
+                    if i < len(ref_media_ids_per_variant)
+                    else None
+                )
+                inputs_i = _to_inputs(refs_i)
+                if inputs_i is not None:
+                    item["imageInputs"] = inputs_i
+            elif shared_inputs is not None:
+                item["imageInputs"] = list(shared_inputs)
             requests_arr.append(item)
 
         body = {

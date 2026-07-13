@@ -36,12 +36,23 @@ def init_db() -> None:
                 models.Asset.__table__.drop(conn, checkfirst=True)
                 conn.commit()
 
-        # Edge.source_variant_idx — added when per-edge variant pinning
-        # shipped. SQLite ALTER TABLE ADD COLUMN is non-destructive (and
-        # idempotent via the column-existence check), so existing DBs
-        # pick up the new column on first boot without losing data.
-        # `create_all` below won't help because it skips ALTERs on
-        # existing tables.
+        # Migration 1: Board.mode — added when image-generation mode
+        # shipped. Existing rows default to 'canvas' so the App keeps
+        # rendering them with the ReactFlow canvas unchanged.
+        if insp.has_table("board"):
+            board_cols = {c["name"] for c in insp.get_columns("board")}
+            if "mode" not in board_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE board ADD COLUMN mode VARCHAR DEFAULT 'canvas'"
+                )
+                conn.commit()
+
+        # Migration 2: Edge.source_variant_idx — added when per-edge
+        # variant pinning shipped. SQLite ALTER TABLE ADD COLUMN is
+        # non-destructive (and idempotent via the column-existence
+        # check), so existing DBs pick up the new column on first boot
+        # without losing data. `create_all` below won't help because it
+        # skips ALTERs on existing tables.
         if insp.has_table("edge"):
             edge_cols = {c["name"] for c in insp.get_columns("edge")}
             if "source_variant_idx" not in edge_cols:

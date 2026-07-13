@@ -1,0 +1,79 @@
+# Flowboard Caddyfile
+#
+# Routing strategy:
+#   • WS upgrade (Connection: Upgrade + Upgrade: websocket)
+#     → agent:9223   (the dedicated ws_server.py, unauthenticated by design)
+#   • Anything else (HTTP REST + StaticFiles frontend)
+#     → agent:8101   (uvicorn FastAPI)
+#
+# Both branches share the same {DOMAIN}:443 with one ACME cert. Caddy
+# auto-provisions and renews via Let's Encrypt using the {EMAIL} below.
+
+{
+    email {$EMAIL:admin@example.com}
+    admin off
+    auto_https on
+}
+
+http://{$DOMAIN:localhost} {
+    redir https://{host}{uri} permanent
+}
+
+https://{$DOMAIN:localhost} {
+    encode zstd gzip
+
+    # Security headers — note: CSP off so extension's MAIN-world script
+    # on labs.google keeps working from your local Chrome.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # ── WebSocket matcher ───────────────────────────────────────────
+    # Detects the standard WS upgrade pair sent by every WebSocket
+    # client (browser, extension service worker, websocat, …).
+    @ws {
+        header Connection *Upgrade*
+        header Upgrade    websocket
+    }
+    handle @ws {
+        reverse_proxy agent:9223 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # WS-friendly timeouts
+            transport http {
+                dial_timeout 10s
+                response_header_timeout 0s
+                read_timeout  0s
+                write_timeout 0s
+                versions      h2c 1.1
+            }
+        }
+    }
+
+    # ── HTTP fallback ───────────────────────────────────────────────
+    # REST API + static frontend dist (mounted by main.py).
+    handle {
+        reverse_proxy agent:8101 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            # Streaming-friendly (FastAPI uses chunked responses for
+            # media bytes). 50 MB cap matches typical video cache size.
+            flush_interval -1
+            max_buffer 52428800
+        }
+    }
+
+    log {
+        output stdout
+        level  INFO
+    }
+}

@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
 
 from flowboard.db import get_session
-from flowboard.db.models import Request
+from flowboard.db.models import GenerationProduct, GenerationResult, Request
 from flowboard.services import media as media_service
+from flowboard.services.media import normalize_media_id
 from flowboard.services.flow_client import flow_client
 from flowboard.services.flow_sdk import get_flow_sdk
 
@@ -717,6 +718,333 @@ async def _handle_gen_video_omni(params: dict) -> tuple[dict, Optional[str]]:
     )
 
 
+async def _handle_gen_image_product(params: dict) -> tuple[dict, Optional[str]]:
+    """Generate-mode per-product dispatch.
+
+    Workflow:
+      1. Validate params (project_id, model_media_id, product_media_id,
+         result_id, prompt) -- fail loud if any are missing rather than
+         letting ``gen_image`` later fail with a confusing 4xx that hides
+         the real cause.
+      2. Call ``gen_image`` with the model image as the FIRST reference
+         (so diffusion weights it as the identity anchor) and the
+         product image as the SECOND reference. ``variant_count=1``
+         because each product gets exactly one output -- the gallery
+         grid is N products wide, not N variants of one product.
+      3. Persist the output media_id on the GenerationResult row,
+         stamp the row ``done``, and ingest the URL via the existing
+         media_service cache so /media/<id> can serve bytes.
+      4. Auto-save the output as a Reference with kind="image" so the
+         user can drag-and-drop it into any later canvas board (best-
+         effort; failures here don't fail the request).
+
+    The flow SDK is the source of truth on tier resolution -- we forward
+    ``paygate_tier`` the same way ``_handle_gen_image`` does, refusing to
+    dispatch when neither the worker (extension) nor params have one.
+    """
+    from flowboard.services.flow_sdk import is_valid_project_id
+
+    board_id = params.get("board_id")
+    product_id = params.get("product_id")
+    result_id = params.get("result_id")
+    model_media_id = params.get("model_media_id")
+    product_media_id = params.get("product_media_id")
+    prompt = params.get("prompt")
+    project_id = params.get("project_id")
+    aspect_ratio = params.get("aspect_ratio") or "IMAGE_ASPECT_RATIO_LANDSCAPE"
+    image_model = params.get("image_model")
+
+    if not (isinstance(board_id, int) and isinstance(product_id, int) and isinstance(result_id, int)):
+        return {}, "missing_board_or_product_or_result_id"
+    if not (isinstance(model_media_id, str) and model_media_id):
+        return {}, "missing_model_media_id"
+    if not (isinstance(product_media_id, str) and product_media_id):
+        return {}, "missing_product_media_id"
+    if not (isinstance(prompt, str) and prompt.strip()):
+        return {}, "missing_prompt"
+    if not (isinstance(project_id, str) and project_id.strip()):
+        return {}, "missing_project_id"
+    project_id = project_id.strip()
+    if not is_valid_project_id(project_id):
+        return {}, "invalid_project_id"
+
+    # Tier resolution: caller-stamped first, then the live value from
+    # ``flow_client``. NO silent default -- see gen_image's matching
+    # block for the rationale. Earlier code defaulted silently and
+    # corrupted /api/auth/me responses for the rest of the session.
+    tier = params.get("paygate_tier") or flow_client.paygate_tier
+    if tier is None:
+        return {}, "paygate_tier_unknown"
+
+    # Mark the GenerationResult row as "running" BEFORE we dispatch so
+    # the gallery's latest-result-per-product query reflects it
+    # immediately.
+    with get_session() as s:
+        gr = s.get(GenerationResult, result_id)
+        if gr is None:
+            return {}, "result_row_missing"
+        gr.status = "running"
+        s.add(gr)
+        s.commit()
+
+    sdk = get_flow_sdk()
+    resp = await sdk.gen_image(
+        prompt=prompt.strip(),
+        project_id=project_id,
+        aspect_ratio=aspect_ratio,
+        paygate_tier=tier,
+        ref_media_ids=[model_media_id, product_media_id],
+        variant_count=1,
+        image_model=image_model if isinstance(image_model, str) and image_model.strip() else None,
+    )
+    if resp.get("error"):
+        # Persist the error on the GenerationResult row too so the
+        # gallery can render the reason verbatim without re-deriving
+        # it from the Request row (the Request row's error is what
+        # ``_process_one`` stamps; both stay consistent).
+        with get_session() as s:
+            gr_err = s.get(GenerationResult, result_id)
+            if gr_err is not None:
+                gr_err.status = "failed"
+                gr_err.error = str(resp["error"])[:500]
+                gr_err.finished_at = datetime.now(timezone.utc)
+                s.add(gr_err)
+                s.commit()
+        return resp, str(resp["error"])[:200]
+
+    raw_media_ids = resp.get("media_ids") or []
+    # Normalize the candidate media id before validating: Flow has
+    # historically wrapped ids as "media/<uuid>" (with a slash), which
+    # the validator (^[0-9a-fA-F-]{1,64}$) rejects. Stripping the
+    # prefix handles that variant without changing the UUID-only case.
+    normalized_first = (
+        normalize_media_id(raw_media_ids[0])
+        if raw_media_ids and isinstance(raw_media_ids[0], str)
+        else None
+    )
+    if not raw_media_ids or not normalized_first or not media_service.is_valid_media_id(normalized_first):
+        # Stamp the GenerationResult row "failed" here too -- without
+        # this, the row stays in "running" and the UI shows "Đang tạo"
+        # forever even though the Request row stamped "failed".
+        reason = "no_media_ids_returned" if not raw_media_ids else "invalid_output_media_id"
+        with get_session() as s:
+            gr_err = s.get(GenerationResult, result_id)
+            if gr_err is not None:
+                gr_err.status = "failed"
+                gr_err.error = reason
+                gr_err.finished_at = datetime.now(timezone.utc)
+                s.add(gr_err)
+                s.commit()
+        return resp, reason
+
+    output_media_id = normalized_first
+
+    # Ingest the Flow CDN URL into the local cache + Asset table so
+    # /media/<id> can serve bytes. Same machinery gen_image uses.
+    entries_with_urls = [
+        e for e in (resp.get("media_entries") or []) if isinstance(e, dict) and e.get("url")
+    ]
+    if entries_with_urls:
+        try:
+            media_service.ingest_urls(entries_with_urls)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "auto-ingest from gen_image_product failed (result=%s)", result_id,
+            )
+
+    # Persist + auto-save as Reference. Both in their own sessions so
+    # we don't hold the SQLite connection during the (potentially
+    # long-running) ingest.
+    product_label = ""
+    with get_session() as s:
+        gr_done = s.get(GenerationResult, result_id)
+        prod_row = s.get(GenerationProduct, product_id)
+        product_label = prod_row.label if prod_row is not None else ""
+        gr_done.output_media_id = output_media_id
+        gr_done.status = "done"
+        gr_done.error = None
+        gr_done.finished_at = datetime.now(timezone.utc)
+        s.add(gr_done)
+        s.commit()
+        # Best-effort Reference save -- the helper swallows errors and
+        # logs; do NOT let it fail the request.
+        from flowboard.routes.generation_mode import save_result_as_reference
+        save_result_as_reference(
+            s,
+            board_id=board_id,
+            product_id=product_id,
+            output_media_id=output_media_id,
+            label=product_label,
+        )
+
+    return (
+        {
+            "media_ids": [output_media_id],
+            "media_entries": resp.get("media_entries") or [],
+            "product_id": product_id,
+            "result_id": result_id,
+        },
+        None,
+    )
+
+
+async def _handle_gen_image_product_batch(params: dict) -> tuple[dict, Optional[str]]:
+    """Generate-mode BATCH dispatch.
+
+    Batches up to ``MAX_VARIANT_COUNT`` (4) products into a single
+    ``gen_image`` call, each variant conditioned on its own product
+    reference (model + products[i]). One Request row covers N product
+    rows in ``GenerationResult`` -- partial failures are tracked per
+    slot so the remaining rows still complete.
+
+    Worker params (same envelope as ``_handle_gen_image_product`` plus
+    a per-product list):
+
+      - board_id: int
+      - model_media_id: str
+      - prompts: list[str]      # length == N
+      - project_id: str
+      - aspect_ratio: str
+      - image_model: Optional[str]
+      - items: list[{product_id, product_media_id, result_id}]
+
+    Return value mirrors ``gen_image`` shape plus a ``succeeded`` list
+    so the route can map each variant back to its GenerationResult row.
+    """
+    from flowboard.services.flow_sdk import MAX_VARIANT_COUNT, is_valid_project_id
+
+    board_id = params.get("board_id")
+    model_media_id = params.get("model_media_id")
+    project_id = params.get("project_id")
+    aspect_ratio = params.get("aspect_ratio") or "IMAGE_ASPECT_RATIO_LANDSCAPE"
+    image_model = params.get("image_model")
+    prompts = params.get("prompts")
+    items = params.get("items")
+
+    if not isinstance(board_id, int):
+        return {}, "missing_board_id"
+    if not (isinstance(model_media_id, str) and model_media_id):
+        return {}, "missing_model_media_id"
+    if not (isinstance(project_id, str) and project_id.strip()):
+        return {}, "missing_project_id"
+    if not is_valid_project_id(project_id):
+        return {}, "invalid_project_id"
+    if not isinstance(items, list) or not items:
+        return {}, "missing_items"
+    if not isinstance(prompts, list) or len(prompts) != len(items):
+        return {}, "prompts_length_mismatch"
+    # Refuse oversize batches -- caller must chunk before enqueuing.
+    if len(items) > MAX_VARIANT_COUNT:
+        return {}, f"batch_too_large:{len(items)}>MAX_VARIANT_COUNT"
+
+    # Tier resolution: caller-stamped first, then the live value.
+    tier = params.get("paygate_tier") or flow_client.paygate_tier
+    if tier is None:
+        return {}, "paygate_tier_unknown"
+
+    # Mark all GenerationResult rows in the batch as "running" so the
+    # gallery UI flips to in-flight state for the whole batch atomically.
+    result_ids = [it["result_id"] for it in items if isinstance(it.get("result_id"), int)]
+    with get_session() as s:
+        for rid in result_ids:
+            gr = s.get(GenerationResult, rid)
+            if gr is not None:
+                gr.status = "running"
+                s.add(gr)
+        s.commit()
+
+    # Per-variant refs: entry i = [model_media_id, items[i]["product_media_id"]].
+    refs_per_variant: list[list[str]] = []
+    for it in items:
+        if not (isinstance(it.get("product_media_id"), str) and it["product_media_id"]):
+            return {}, "missing_product_media_id"
+        refs_per_variant.append([model_media_id, it["product_media_id"]])
+
+    sdk = get_flow_sdk()
+    resp = await sdk.gen_image(
+        prompt=prompts[0] if prompts else "",
+        project_id=project_id,
+        aspect_ratio=aspect_ratio,
+        paygate_tier=tier,
+        variant_count=len(items),
+        prompts=prompts,
+        ref_media_ids_per_variant=refs_per_variant,
+        image_model=image_model if isinstance(image_model, str) and image_model.strip() else None,
+    )
+
+    if resp.get("error"):
+        err_str = str(resp["error"])[:500]
+        with get_session() as s:
+            for rid in result_ids:
+                gr = s.get(GenerationResult, rid)
+                if gr is not None:
+                    gr.status = "failed"
+                    gr.error = err_str
+                    gr.finished_at = datetime.now(timezone.utc)
+                    s.add(gr)
+            s.commit()
+        return resp, err_str[:200]
+
+    # Persist outputs aligned to the request positions. ``media_ids`` and
+    # ``media_entries`` from the SDK are positional in variant order.
+    media_ids = resp.get("media_ids") or []
+    media_entries = resp.get("media_entries") or []
+
+    # Ingest URLs in one shot so /media/<id> can serve bytes.
+    entries_with_urls = [
+        e for e in media_entries if isinstance(e, dict) and e.get("url")
+    ]
+    if entries_with_urls:
+        try:
+            media_service.ingest_urls(entries_with_urls)
+        except Exception:  # noqa: BLE001
+            logger.exception("auto-ingest from gen_image_product_batch failed (board=%s)", board_id)
+
+    succeeded_payload: list[dict[str, Any]] = []
+    with get_session() as s:
+        for idx, it in enumerate(items):
+            rid = it["result_id"]
+            product_id = it["product_id"]
+            mid = media_ids[idx] if idx < len(media_ids) else None
+            gr = s.get(GenerationResult, rid)
+            prod_row = s.get(GenerationProduct, product_id)
+            product_label = prod_row.label if prod_row is not None else ""
+            if isinstance(mid, str) and media_service.is_valid_media_id(mid):
+                gr.output_media_id = mid
+                gr.status = "done"
+                gr.error = None
+                gr.finished_at = datetime.now(timezone.utc)
+                succeeded_payload.append({
+                    "result_id": rid,
+                    "product_id": product_id,
+                    "output_media_id": mid,
+                })
+                # Auto-save Reference (best effort).
+                from flowboard.routes.generation_mode import save_result_as_reference
+                save_result_as_reference(
+                    s,
+                    board_id=board_id,
+                    product_id=product_id,
+                    output_media_id=mid,
+                    label=product_label,
+                )
+            else:
+                gr.status = "failed"
+                gr.error = "no_media_id_for_slot"
+                gr.finished_at = datetime.now(timezone.utc)
+            s.add(gr)
+        s.commit()
+
+    return (
+        {
+            "succeeded": succeeded_payload,
+            "media_ids": media_ids,
+            "all_request_ids": result_ids,
+        },
+        None,
+    )
+
+
 _DEFAULT_HANDLERS: dict[str, Handler] = {
     "proxy": _handle_proxy,
     "create_project": _handle_create_project,
@@ -724,6 +1052,8 @@ _DEFAULT_HANDLERS: dict[str, Handler] = {
     "gen_video": _handle_gen_video,
     "gen_video_omni": _handle_gen_video_omni,
     "edit_image": _handle_edit_image,
+    "gen_image_product": _handle_gen_image_product,
+    "gen_image_product_batch": _handle_gen_image_product_batch,
 }
 
 

@@ -1,0 +1,68 @@
+# Flowboard production stack
+#   agent  — Python FastAPI + WS server (only reachable from caddy via the
+#            shared compose network; no public ports)
+#   caddy  — TLS terminator + reverse proxy. Splits HTTP→8101 / WS→9223
+#            by Upgrade header. Auto-provisions Let's Encrypt cert.
+#
+# Required env (see .env.example):
+#   FLOWBOARD_DOMAIN  DNS A/AAAA record pointing at this VPS
+#   FLOWBOARD_EMAIL   Let's Encrypt registration email
+#
+# Usage:  ./deploy.sh up
+
+name: flowboard
+
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: flowboard-agent:local
+    container_name: flowboard-agent
+    restart: unless-stopped
+    # No `ports:` — caddy reaches agent via the compose default network.
+    env_file:
+      - .env
+    environment:
+      # allow override via .env while keeping image defaults
+      FLOWBOARD_PLANNER_BACKEND: ${FLOWBOARD_PLANNER_BACKEND:-real}
+      FLOWBOARD_PLANNER_MODEL:   ${FLOWBOARD_PLANNER_MODEL:-MiniMax-M2.7-highspeed}
+    volumes:
+      - storage:/srv/storage
+      - secrets:/srv/secrets
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8101/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: flowboard-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    environment:
+      DOMAIN: ${FLOWBOARD_DOMAIN:?set FLOWBOARD_DOMAIN in .env}
+      EMAIL:  ${FLOWBOARD_EMAIL:?set FLOWBOARD_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      agent:
+        condition: service_healthy
+    # If you ever need to point the extension directly at a port instead
+    # of through 443, expose 9223 here. Keep commented by default —
+    # the @ws handle in Caddyfile already forwards it through 443.
+    # ports:
+    #   - "9223:9223"
+
+volumes:
+  storage:
+  secrets:
+  caddy_data:
+  caddy_config:

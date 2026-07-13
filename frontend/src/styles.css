@@ -401,6 +401,18 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* The child surfaces (ReactFlow in canvas mode, GenerationBoard in
+   * generate mode) opt back into scrolling via their own rules. */
+}
+
+/* ── GenerationBoard scroll setup ───────────────────────────────────────── */
+/* The .canvas-wrap (above) is `overflow: hidden` + `display: flex` for
+ * the ReactFlow canvas mode. Generation mode's child explicitly opts
+ * out of the clipping by taking the full remaining height and providing
+ * its own vertical scrollbar (see .generation-board rule further down).
+ * This rule keeps the parent from collapsing the child. */
+.canvas-wrap:has(.generation-board) {
+  /* No style override needed; min-height on the child handles it. */
 }
 
 /* ── Canvas loading shim ────────────────────────────────────────────────── */
@@ -5408,4 +5420,774 @@ button:disabled {
   border-color: rgba(197, 118, 255, 0.55);
   background: rgba(124, 92, 255, 0.08);
   outline: none;
+}
+
+/* ── New-project dialog mode picker ─────────────────────────────────────── */
+
+.project-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0 18px 0;
+}
+
+.project-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px;
+  background: var(--card, #1c1c25);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.project-mode-card:hover {
+  border-color: var(--accent, #8b5cf6);
+  background: rgba(139, 92, 246, 0.08);
+  transform: translateY(-1px);
+}
+
+.project-mode-card:focus {
+  outline: none;
+  border-color: var(--accent, #8b5cf6);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
+}
+
+.project-mode-card__icon {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--accent, #8b5cf6);
+}
+
+.project-mode-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.project-mode-card__desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted, #9b9bb5);
+}
+
+/* ── Generation Board view ──────────────────────────────────────────────── */
+
+.generation-board {
+  /* Self-scrolling flex column: lives inside .canvas-wrap (which has
+   * `overflow: hidden` for the ReactFlow mode). min-height: 0 is the
+   * magic flex property that lets a flex item shrink past its content
+   * size so overflow can kick in.
+   *
+   * Full-width on purpose -- the previous 1100 px cap cramped the
+   * prompt textarea and pushed the gallery into a narrow column.
+   * The view is now allowed to use every pixel of the canvas-wrap.
+   */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 32px 32px 32px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.generation-board__loading {
+  padding: 80px 24px;
+  text-align: center;
+  color: var(--muted, #9b9bb5);
+}
+
+.generation-board__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.generation-board__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.generation-board__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fg, #f3f3fa);
+}
+
+.generation-board__mode-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(139, 92, 246, 0.18);
+  color: #c5b3ff;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.generation-board__error {
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+/* Drop zones (shared between model + products). */
+.generation-board__model-drop,
+.generation-board__products {
+  border: 1.5px dashed var(--border, #34344a);
+  border-radius: 14px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.generation-board__drop--hover {
+  border-color: var(--accent, #8b5cf6);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.generation-board__drop--filled {
+  border-style: solid;
+  background: var(--card, #1c1c25);
+}
+
+.generation-board__drop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 28px 16px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.generation-board__drop-icon {
+  font-size: 32px;
+  line-height: 1;
+  color: var(--accent, #8b5cf6);
+}
+
+.generation-board__drop-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.generation-board__drop-desc {
+  font-size: 12.5px;
+  color: var(--muted, #9b9bb5);
+  text-align: center;
+  max-width: 520px;
+}
+
+.generation-board__drop-formats {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #6b6b85);
+  margin-top: 6px;
+}
+
+.generation-board__drop-error {
+  font-size: 11.5px;
+  color: #fda4af;
+}
+
+.generation-board__model-preview {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.generation-board__model-thumb {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border, #34344a);
+  background: #000;
+  flex: 0 0 auto;
+}
+
+.generation-board__model-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.generation-board__model-hint {
+  font-size: 11.5px;
+  color: var(--muted, #9b9bb5);
+  max-width: 360px;
+}
+
+/* Prompt + chips row. */
+.generation-board__prompt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generation-board__prompt-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #9b9bb5);
+  font-weight: 600;
+}
+
+.generation-board__prompt-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 10px 12px;
+  background: var(--card, #1c1c25);
+  color: var(--fg, #f3f3fa);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.generation-board__prompt-input:focus {
+  outline: none;
+  border-color: var(--accent, #8b5cf6);
+}
+
+.generation-board__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.generation-board__chip-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #9b9bb5);
+  margin-right: 4px;
+  font-weight: 600;
+}
+
+.generation-board__chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #34344a);
+  background: transparent;
+  color: var(--fg, #f3f3fa);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.generation-board__chip:hover {
+  border-color: var(--accent, #8b5cf6);
+}
+
+.generation-board__chip--active {
+  border-color: var(--accent, #8b5cf6);
+  background: rgba(139, 92, 246, 0.18);
+}
+
+/* Products grid. */
+.generation-board__products-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.generation-board__subtitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.generation-board__products-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 36px 16px;
+  background: transparent;
+  border: none;
+  color: var(--muted, #9b9bb5);
+  cursor: pointer;
+  font: inherit;
+}
+
+.generation-board__product-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.generation-board__product-tile {
+  position: relative;
+  background: var(--card, #1c1c25);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.generation-board__product-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #000;
+  overflow: hidden;
+}
+
+.generation-board__product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.generation-board__product-pill {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+}
+
+.generation-board__product-pill--done {
+  background: rgba(16, 185, 129, 0.85);
+}
+
+.generation-board__product-pill--failed {
+  background: rgba(244, 63, 94, 0.9);
+}
+
+.generation-board__product-pill--running,
+.generation-board__product-pill--queued,
+.generation-board__product-pill--pending {
+  background: rgba(139, 92, 246, 0.85);
+}
+
+.generation-board__product-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border, #34344a);
+}
+
+.generation-board__icon-btn {
+  /* Action chips on each product tile (regenerate / delete). Sized for
+   * comfortable thumb taps on touchpads and tablets -- the previous
+   * 13 px glyph was hard to spot in the tile footer. */
+  flex: 1;
+  min-height: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--fg, #f3f3fa);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.generation-board__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border, #34344a);
+}
+
+.generation-board__icon-btn--danger:hover {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fda4af;
+}
+
+.generation-board__product-add {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: transparent;
+  border: 1.5px dashed var(--border, #34344a);
+  border-radius: 10px;
+  color: var(--muted, #9b9bb5);
+  cursor: pointer;
+  font-size: 22px;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.generation-board__product-add:hover {
+  border-color: var(--accent, #8b5cf6);
+  color: var(--accent, #8b5cf6);
+}
+
+/* Results gallery. */
+.generation-board__gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.generation-board__gallery-hint {
+  margin: 0;
+  color: var(--muted, #9b9bb5);
+  font-size: 12.5px;
+}
+
+.generation-board__result-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.generation-board__result-tile {
+  background: var(--card, #1c1c25);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generation-board__result-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+.generation-board__result-side {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.generation-board__result-side img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border, #34344a);
+  background: #000;
+  display: block;
+}
+
+.generation-board__result-side figcaption {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #9b9bb5);
+  text-align: center;
+}
+
+.generation-board__result-placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--border, #34344a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #9b9bb5);
+  font-size: 12px;
+}
+
+.generation-board__result-error {
+  font-size: 11px;
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+/* Action bar at the very end of the scrollable column. We don't
+ * use position: sticky here because the parent generation-board is the
+ * scroll container — `sticky` inside an `overflow-y: auto` parent only
+ * sticks to that parent's edges, which is fragile. A regular block at
+ * the end of the column is unambiguous: it scrolls into view, then
+ * stays visible just past the last content block.
+ */
+.generation-board__action-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 12px;
+  margin-top: 6px;
+}
+
+.generation-board__progress {
+  flex: 1;
+  color: var(--muted, #9b9bb5);
+  font-size: 12.5px;
+}
+
+/* ── Inline spinner + thumb overlay (used during uploads) ─────────────── */
+
+.generation-board__inline-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border: 2px solid rgba(139, 92, 246, 0.25);
+  border-top-color: var(--accent, #8b5cf6);
+  border-radius: 50%;
+  animation: generation-board__spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.generation-board__thumb--loading {
+  position: relative;
+  opacity: 0.65;
+}
+
+.generation-board__thumb--loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+@keyframes generation-board__spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ── Image preview modal ───────────────────────────────────────────────── */
+
+.image-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(8px);
+  cursor: zoom-out;
+  box-sizing: border-box;
+  animation: image-preview-modal__fade 120ms ease-out;
+}
+
+@keyframes image-preview-modal__fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.image-preview-modal__img {
+  /* Fit to viewport without cropping. The cursor on the backdrop is
+   * `zoom-out`; override on the img to indicate it can be inspected
+   * (and to signal "click anywhere outside to close"). */
+  max-width: min(90vw, 1400px);
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  user-select: none;
+}
+
+.image-preview-modal__caption {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  cursor: default;
+  text-align: center;
+  max-width: min(90vw, 800px);
+}
+
+.image-preview-modal__close {
+  /* Top-right close button. Sits above the image so a user can dismiss
+   * the modal from the corner without aim. The backdrop click is the
+   * second path. */
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.image-preview-modal__close:hover {
+  background: rgba(244, 63, 94, 0.5);
+  border-color: rgba(244, 63, 94, 0.7);
+  transform: scale(1.06);
+}
+
+.image-preview-modal__close:focus-visible {
+  outline: 2px solid var(--accent, #8b5cf6);
+  outline-offset: 2px;
+}
+
+/* ── Clickable image thumbnails (preview hook) ──────────────────────────── */
+
+/* Buttons that wrap an <img> so the whole tile becomes click-to-preview.
+ * Resetting native button styles so the image fills the host cell. */
+.generation-board__thumb-button {
+  display: block;
+  position: relative;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  cursor: zoom-in;
+  width: 100%;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+}
+
+/* The product tile already has its own thumbnail style -- promote the
+ * button to take its visual role. */
+button.generation-board__thumb-button.generation-board__product-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #000;
+  border-radius: 0;
+}
+
+button.generation-board__thumb-button.generation-board__product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+button.generation-board__thumb-button.generation-board__result-thumb {
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border, #34344a);
+  background: #000;
+}
+
+button.generation-board__thumb-button.generation-board__result-thumb img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+
+button.generation-board__thumb-button:hover {
+  filter: brightness(1.06);
+}
+
+/* ── Input row (model + prompt on a single line) ─────────────────── */
+
+.generation-board__input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
+  min-height: 280px;
+}
+
+.generation-board__input-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.generation-board__input-col--model {
+  flex: 0 0 28%;
+  max-width: 360px;
+}
+
+.generation-board__input-col--prompt {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* When the model column drops into the prompt row's full width on
+ * narrow viewports so the layout doesn't get squashed. Just stacks. */
+@media (max-width: 760px) {
+  .generation-board__input-row {
+    flex-direction: column;
+    min-height: 0;
+  }
+  .generation-board__input-col--model,
+  .generation-board__input-col--prompt {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Auto-generate button sits in the same flex row as the prompt label.
+ * Sizes like a chip so it doesn't compete with the textarea height. */
+.generation-board__autoprompt-btn {
+  margin-left: auto;
+  align-self: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent, #8b5cf6);
+  color: var(--accent, #8b5cf6);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.generation-board__autoprompt-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.18);
+  color: #d6c4ff;
 }

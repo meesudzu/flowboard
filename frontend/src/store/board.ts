@@ -241,6 +241,9 @@ function persistBoardId(id: number | null): void {
 interface BoardState {
   boardId: number | null;
   boardName: string;
+  // Mirrors the active board's mode so App.tsx can branch into
+  // GenerationBoard for generate boards (and skip loading nodes/edges).
+  boardMode: "canvas" | "generate" | null;
   // Lightweight summary list rendered by the ProjectSidebar — full node /
   // edge content lives only on the active board to keep memory bounded.
   boards: Board[];
@@ -257,7 +260,7 @@ interface BoardState {
   // poll-state on the generation store.
   switchBoard(id: number): Promise<void>;
   // Create a new board, switch to it, return id.
-  createNewBoard(name: string): Promise<number | null>;
+  createNewBoard(name: string, mode?: "canvas" | "generate"): Promise<number | null>;
   // Delete a board. If it's the active one, switch to first remaining
   // board (or create a fresh "Untitled" if list ends up empty).
   deleteBoardById(id: number): Promise<void>;
@@ -305,6 +308,7 @@ interface BoardState {
 export const useBoardStore = create<BoardState>((set, get) => ({
   boardId: null,
   boardName: "",
+  boardMode: null,
   boards: [],
   nodes: [],
   edges: [],
@@ -362,6 +366,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({
         boardId: detail.board.id,
         boardName: detail.board.name,
+        boardMode: detail.board.mode,
         boards,
         nodes,
         edges,
@@ -419,6 +424,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({
         boardId: detail.board.id,
         boardName: detail.board.name,
+        boardMode: detail.board.mode,
         nodes,
         edges,
         loading: false,
@@ -429,9 +435,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
-  async createNewBoard(name) {
+  async createNewBoard(name, mode) {
     try {
-      const board = await createBoard(name || "Untitled");
+      const board = await createBoard(name || "Untitled", mode);
       // Add to list (front of list so the newly-created project shows up
       // at the top of the sidebar) and switch to it.
       set((s) => ({ boards: [board, ...s.boards] }));

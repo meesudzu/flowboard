@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import delete as sql_delete, select
@@ -21,6 +23,11 @@ router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 class BoardCreate(BaseModel):
     name: str
+    # Optional at the wire level so existing callers (and tests) that
+    # POST only {"name": "..."} still work — defaults to "canvas".
+    # Supported values: "canvas", "generate". Any other value is
+    # rejected below rather than silently coerced so the typo is loud.
+    mode: Optional[str] = None
 
 
 class BoardUpdate(BaseModel):
@@ -33,11 +40,34 @@ def list_boards():
         return s.exec(select(Board)).all()
 
 
+_VALID_MODES = ("canvas", "generate")
+
+
 @router.post("")
 def create_board(body: BoardCreate):
+    mode = body.mode or "canvas"
+    if mode not in _VALID_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid mode {mode!r}; must be one of {list(_VALID_MODES)}",
+        )
     with get_session() as s:
-        board = Board(name=body.name)
+        board = Board(name=body.name, mode=mode)
         s.add(board)
+        # Insert first so the autoincrement id is populated (used as
+        # the FK for the GenerationConfig row below).
+        s.flush()
+        # Generate-mode projects get a 1:1 config row up-front so the
+        # GET endpoint can always return a config (even before the
+        # user uploads anything). PK is board_id so the invariant is
+        # enforced by the schema.
+        if mode == "generate":
+            from flowboard.db.models import GenerationConfig
+            s.add(GenerationConfig(board_id=board.id))
+        # Single commit covers both Board + (optional) GenerationConfig
+        # so the Board instance never has to be re-hydrated by a
+        # follow-up call -- expire_on_commit would otherwise blow it
+        # away between the two commits.
         s.commit()
         s.refresh(board)
         return board
@@ -107,6 +137,14 @@ def delete_board(board_id: int):
         s.exec(sql_delete(Plan).where(Plan.board_id == board_id))
         s.exec(sql_delete(ChatMessage).where(ChatMessage.board_id == board_id))
         s.exec(sql_delete(BoardFlowProject).where(BoardFlowProject.board_id == board_id))
+        # Generation-mode children: result → product → config. All
+        # scoped by board_id (we don't even need to follow product_id
+        # because GenerationResult.board_id is independently indexed,
+        # making the cascade a constant-time two-pass delete).
+        from flowboard.db.models import GenerationConfig, GenerationProduct, GenerationResult
+        s.exec(sql_delete(GenerationResult).where(GenerationResult.board_id == board_id))
+        s.exec(sql_delete(GenerationProduct).where(GenerationProduct.board_id == board_id))
+        s.exec(sql_delete(GenerationConfig).where(GenerationConfig.board_id == board_id))
         s.delete(board)
         s.commit()
         return {"deleted": board_id}

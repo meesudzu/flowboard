@@ -27,6 +27,8 @@ export function ProjectSidebar() {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [newDialogStep, setNewDialogStep] = useState<"mode" | "name">("mode");
+  const [newDialogMode, setNewDialogMode] = useState<"canvas" | "generate" | null>(null);
   const [newDialogName, setNewDialogName] = useState("");
   const [newDialogBusy, setNewDialogBusy] = useState(false);
   const newDialogInputRef = useRef<HTMLInputElement>(null);
@@ -109,27 +111,50 @@ export function ProjectSidebar() {
 
   function handleNew() {
     setNewDialogName("Chưa đặt tên");
+    setNewDialogStep("mode");
+    setNewDialogMode(null);
     setNewDialogOpen(true);
-    setTimeout(() => newDialogInputRef.current?.select(), 30);
   }
 
   function closeNewDialog() {
     if (newDialogBusy) return;
     setNewDialogOpen(false);
+    setNewDialogStep("mode");
+    setNewDialogMode(null);
     setNewDialogName("");
+  }
+
+  function pickMode(mode: "canvas" | "generate") {
+    setNewDialogMode(mode);
+    setNewDialogStep("name");
+    // Focus name input after the step transition paints.
+    setTimeout(() => newDialogInputRef.current?.select(), 30);
   }
 
   async function commitNewDialog() {
     if (newDialogBusy) return;
+    if (newDialogStep !== "name" || newDialogMode === null) {
+      // No mode picked yet — send the user back to step 1.
+      setNewDialogStep("mode");
+      return;
+    }
     const name = newDialogName.trim() || "Chưa đặt tên";
     setNewDialogBusy(true);
     try {
-      await createNewBoard(name);
+      await createNewBoard(name, newDialogMode);
     } finally {
       setNewDialogBusy(false);
       setNewDialogOpen(false);
+      setNewDialogStep("mode");
+      setNewDialogMode(null);
       setNewDialogName("");
     }
+  }
+
+  /** Back from step 2 to step 1 without closing the dialog. */
+  function backToModeStep() {
+    if (newDialogBusy) return;
+    setNewDialogStep("mode");
   }
 
   // Esc closes the new-project dialog.
@@ -399,44 +424,96 @@ export function ProjectSidebar() {
             aria-labelledby="new-project-title"
           >
             <h2 id="new-project-title" className="project-modal__title">
-              Dự án mới
+              {newDialogStep === "mode" ? "Dự án mới" : `Đặt tên (${newDialogMode === "generate" ? "Tạo ảnh" : "Bảng vẽ"})`}
             </h2>
-            <p className="project-modal__hint">
-              Tên project hiển thị trong sidebar. Có thể đổi sau.
-            </p>
-            <input
-              ref={newDialogInputRef}
-              className="project-modal__input"
-              type="text"
-              maxLength={80}
-              value={newDialogName}
-              onChange={(e) => setNewDialogName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitNewDialog();
-                if (e.key === "Escape") closeNewDialog();
-              }}
-              placeholder="Chưa đặt tên"
-              disabled={newDialogBusy}
-              autoFocus
-            />
-            <div className="project-modal__actions">
-              <button
-                type="button"
-                className="project-modal__btn"
-                onClick={closeNewDialog}
-                disabled={newDialogBusy}
-              >
-                Huỷ
-              </button>
-              <button
-                type="button"
-                className="project-modal__btn project-modal__btn--primary"
-                onClick={commitNewDialog}
-                disabled={newDialogBusy}
-              >
-                {newDialogBusy ? "Đang tạo…" : "Tạo"}
-              </button>
-            </div>
+            {newDialogStep === "mode" ? (
+              <>
+                <p className="project-modal__hint">
+                  Chọn loại dự án. Có thể tạo bao nhiêu tuỳ ý — mỗi dự án một bảng vẽ riêng.
+                </p>
+                <div className="project-mode-grid">
+                  <button
+                    type="button"
+                    className="project-mode-card"
+                    onClick={() => pickMode("canvas")}
+                    autoFocus
+                  >
+                    <span className="project-mode-card__icon" aria-hidden="true">▣</span>
+                    <span className="project-mode-card__title">Bảng vẽ</span>
+                    <span className="project-mode-card__desc">
+                      Bảng vẽ với nhân vật, sản phẩm, ảnh và video — như trước.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="project-mode-card"
+                    onClick={() => pickMode("generate")}
+                  >
+                    <span className="project-mode-card__icon" aria-hidden="true">✦</span>
+                    <span className="project-mode-card__title">Tạo ảnh</span>
+                    <span className="project-mode-card__desc">
+                      Upload 1 ảnh model + nhiều ảnh sản phẩm → tạo ảnh cho từng sản phẩm.
+                    </span>
+                  </button>
+                </div>
+                <div className="project-modal__actions">
+                  <button
+                    type="button"
+                    className="project-modal__btn"
+                    onClick={closeNewDialog}
+                  >
+                    Huỷ
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="project-modal__hint">
+                  Tên project hiển thị trong sidebar. Có thể đổi sau.
+                </p>
+                <input
+                  ref={newDialogInputRef}
+                  className="project-modal__input"
+                  type="text"
+                  maxLength={80}
+                  value={newDialogName}
+                  onChange={(e) => setNewDialogName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitNewDialog();
+                    if (e.key === "Escape") closeNewDialog();
+                  }}
+                  placeholder="Chưa đặt tên"
+                  disabled={newDialogBusy}
+                  autoFocus
+                />
+                <div className="project-modal__actions">
+                  <button
+                    type="button"
+                    className="project-modal__btn"
+                    onClick={backToModeStep}
+                    disabled={newDialogBusy}
+                  >
+                    ← Quay lại
+                  </button>
+                  <button
+                    type="button"
+                    className="project-modal__btn"
+                    onClick={closeNewDialog}
+                    disabled={newDialogBusy}
+                  >
+                    Huỷ
+                  </button>
+                  <button
+                    type="button"
+                    className="project-modal__btn project-modal__btn--primary"
+                    onClick={commitNewDialog}
+                    disabled={newDialogBusy}
+                  >
+                    {newDialogBusy ? "Đang tạo…" : "Tạo"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

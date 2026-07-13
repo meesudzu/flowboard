@@ -116,6 +116,10 @@ export interface Board {
   id: number;
   name: string;
   created_at: string;
+  // Backend distinguishes two board surfaces — "canvas" is the existing
+  // React-Flow canvas; "generate" bypasses the canvas entirely and
+  // renders the image-generation view (one model + N products -> N outputs).
+  mode: "canvas" | "generate";
 }
 
 export interface NodeDTO {
@@ -157,10 +161,13 @@ export function listBoards(): Promise<Board[]> {
   return api<Board[]>("/api/boards");
 }
 
-export function createBoard(name: string): Promise<Board> {
+export function createBoard(
+  name: string,
+  mode: "canvas" | "generate" = "canvas",
+): Promise<Board> {
   return api<Board>("/api/boards", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, mode }),
   });
 }
 
