@@ -117,15 +117,18 @@ cmd_status() {
     say "Containers:"
     docker compose ps
     echo
-    say "/api/health (via caddy, requires DOMAIN set in .env + DNS pointing here):"
+    say "/api/health (via caddy, requires DNS pointing to this VPS):"
     local domain
-    domain=$(grep '^FLOWBOARD_DOMAIN=' .env | cut -d= -f2-)
-    if [[ -n "$domain" && "$domain" != "flow.runany.dev" ]]; then
-        curl -sS --max-time 5 "https://${domain}/api/health" \
-            | python3 -m json.tool 2>/dev/null \
-            || warn "agent not yet reachable on https://${domain}"
+    domain=$(grep '^FLOWBOARD_DOMAIN=' .env 2>/dev/null | cut -d= -f2-)
+    if [[ -z "$domain" ]]; then
+        warn "FLOWBOARD_DOMAIN not set in .env — skipping remote probe"
+    elif [[ "$domain" == *.example.com || "$domain" == *example.org ]]; then
+        warn "FLOWBOARD_DOMAIN still looks like a placeholder ($domain) — skipping"
     else
-        warn "skip remote health probe — FLOWBOARD_DOMAIN not configured"
+        local out
+        out=$(curl -sS --max-time 5 "https://${domain}/api/health" 2>&1) \
+            && printf "%s\n" "$out" | python3 -m json.tool 2>/dev/null \
+            || warn "agent not yet reachable on https://${domain} — $out"
     fi
 }
 

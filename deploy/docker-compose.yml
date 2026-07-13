@@ -42,9 +42,9 @@ services:
     container_name: flowboard-caddy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3 (QUIC)
+      # Cloudflare proxy → origin on 8080 (plain HTTP). Cloudflare handles
+      # public TLS termination, so Caddy doesn't need 443.
+      - "8080:8080"
     environment:
       DOMAIN: ${FLOWBOARD_DOMAIN:?set FLOWBOARD_DOMAIN in .env}
       EMAIL:  ${FLOWBOARD_EMAIL:?set FLOWBOARD_EMAIL in .env}
@@ -55,11 +55,6 @@ services:
     depends_on:
       agent:
         condition: service_healthy
-    # If you ever need to point the extension directly at a port instead
-    # of through 443, expose 9223 here. Keep commented by default —
-    # the @ws handle in Caddyfile already forwards it through 443.
-    # ports:
-    #   - "9223:9223"
 
 volumes:
   storage:
