@@ -27,6 +27,11 @@ services:
       # allow override via .env while keeping image defaults
       FLOWBOARD_PLANNER_BACKEND: ${FLOWBOARD_PLANNER_BACKEND:-real}
       FLOWBOARD_PLANNER_MODEL:   ${FLOWBOARD_PLANNER_MODEL:-MiniMax-M2.7-highspeed}
+      # In Docker, WS server must bind 0.0.0.0 so the Caddy container
+      # (different network namespace) can reverse-proxy to agent:9223.
+      # main.py's guard rail allows 0.0.0.0 when it detects /.dockerenv.
+      FLOWBOARD_WS_HOST: 0.0.0.0
+      FLOWBOARD_RUN_IN_CONTAINER: "1"
     volumes:
       - storage:/srv/storage
       - secrets:/srv/secrets

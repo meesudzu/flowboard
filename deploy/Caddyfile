@@ -1,34 +1,29 @@
 # Flowboard Caddyfile — Cloudflare-fronted, Cloudflare SSL = Full
 #
 # Setup:
-#   • Cloudflare proxies flow.runany.dev → <VPS_IP>:443 (HTTPS)
+#   • Cloudflare proxies flow.runany.dev → <VPS_IP>:443 (HTTPS, Full mode)
 #   • Cloudflare SSL/TLS mode = "Full" (accepts self-signed on origin)
-#   • Caddy terminates TLS on :443 with a self-signed cert (auto-generated)
-#     AND listens on :8080 for direct local admin (Apache vhost also points here)
-#
-# Note: with Cloudflare Full, the CF→origin connection IS encrypted (just not
-# by a public CA), so WebSocket upgrade headers pass through end-to-end.
+#   • Caddy terminates TLS on :443 with self-signed cert (tls internal)
+#   • Caddy also listens on :8080 (HTTP) for Apache vhost (path :80 → :8080)
+#   • Agent WS server binds 0.0.0.0:9223 (configured in docker-compose)
 #
 # Routing:
-#   • WS upgrade (Connection: Upgrade + Upgrade: websocket)
-#     → agent:9223   (dedicated ws_server.py)
-#   • Anything else (HTTP REST + StaticFiles frontend)
-#     → agent:8101   (uvicorn FastAPI)
+#   • WS upgrade (Connection: Upgrade + Upgrade: websocket) → agent:9223
+#   • Anything else → agent:8101
 
 {
 	email {$EMAIL:admin@example.com}
 	admin off
 }
 
-# ── HTTPS on :443 — primary path (Cloudflare → here) ──────────────────
+# ── HTTPS on :443 — Cloudflare Full SSL → here ──────────────────────
 https://{$DOMAIN:localhost}:443 {
 	encode zstd gzip
 
-	# Self-signed cert generated on-the-fly by Caddy. Cloudflare Full mode
-	# accepts any cert on origin including self-signed.
+	# Self-signed cert from Caddy's internal CA. Cloudflare Full mode
+	# accepts self-signed (no public CA validation).
 	tls internal
 
-	# Security headers
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options    "nosniff"
@@ -37,24 +32,16 @@ https://{$DOMAIN:localhost}:443 {
 		-Server
 	}
 
-	# ── WebSocket matcher ───────────────────────────────────────────
 	@ws {
 		header Connection *Upgrade*
 		header Upgrade websocket
 	}
 	handle @ws {
-		reverse_proxy agent:9223 {
-			transport http {
-				dial_timeout 10s
-				response_header_timeout 0s
-				read_timeout 0s
-				write_timeout 0s
-				versions h2c 1.1
-			}
-		}
+		# Default transport (HTTP/1.1) — agent WS server doesn't speak h2.
+		# Caddy auto-upgrades to WebSocket on 101 response.
+		reverse_proxy agent:9223
 	}
 
-	# ── HTTP fallback ───────────────────────────────────────────────
 	handle {
 		reverse_proxy agent:8101 {
 			header_up Host {host}
@@ -68,7 +55,7 @@ https://{$DOMAIN:localhost}:443 {
 	}
 }
 
-# ── HTTP on :8080 — used by Apache vhost + local curl ─────────────────
+# ── HTTP on :8080 — used by Apache vhost ───────────────────────────
 http://{$DOMAIN:localhost}:8080 {
 	encode zstd gzip
 
@@ -77,15 +64,7 @@ http://{$DOMAIN:localhost}:8080 {
 		header Upgrade websocket
 	}
 	handle @ws {
-		reverse_proxy agent:9223 {
-			transport http {
-				dial_timeout 10s
-				response_header_timeout 0s
-				read_timeout 0s
-				write_timeout 0s
-				versions h2c 1.1
-			}
-		}
+		reverse_proxy agent:9223
 	}
 
 	handle {

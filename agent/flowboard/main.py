@@ -17,12 +17,32 @@ from flowboard.services.ws_server import run_ws_server
 from flowboard.worker.processor import get_worker
 
 # Guard rail: the dedicated WS server is unauthenticated and would expose the
-# callback secret to any process that can reach it. Refuse to boot if someone
-# overrode WS_HOST to a non-loopback address.
-if WS_HOST not in ("127.0.0.1", "localhost", "::1"):
+# callback secret to any process that can reach it. Default is loopback, which
+# is the safe choice on the host. In Docker, however, "loopback" inside the
+# container is NOT reachable from sibling containers on the bridge network
+# (e.g. Caddy reverse-proxying to agent:9223). For containerized deployments,
+# allow binding to 0.0.0.0 — Docker's network namespace still isolates this
+# from the public internet.
+import os as _os
+_DOCKER_INDICATORS = (
+    _os.path.exists("/.dockerenv"),
+    _os.path.exists("/run/.containerenv"),
+    _os.getenv("FLOWBOARD_RUN_IN_CONTAINER") == "1",
+)
+_in_container = any(_DOCKER_INDICATORS)
+_allowed_hosts = ("127.0.0.1", "localhost", "::1")
+if _in_container:
+    _allowed_hosts = _allowed_hosts + ("0.0.0.0",)
+
+if WS_HOST not in _allowed_hosts:
     raise RuntimeError(
-        f"FLOWBOARD_WS_HOST must be loopback (got {WS_HOST!r}); the extension WS "
-        "is unauthenticated by design and must not be network-reachable."
+        f"FLOWBOARD_WS_HOST must be loopback (or 0.0.0.0 in container); got {WS_HOST!r}. "
+        "The extension WS is unauthenticated by design."
+    )
+if WS_HOST == "0.0.0.0":
+    logger.warning(
+        "FLOWBOARD_WS_HOST=0.0.0.0: WS server binds on all container interfaces. "
+        "Docker network namespace still isolates from public internet."
     )
 
 logger = logging.getLogger(__name__)
