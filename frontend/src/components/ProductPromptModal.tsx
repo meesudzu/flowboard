@@ -11,6 +11,12 @@ interface ProductPromptModalProps {
   /** Persist the override (or the cleared-string when the user
    *  emptied the field) on the server. */
   onSave: (productId: number, promptOverride: string) => Promise<void>;
+  /** Ask the AI to compose a Vietnamese prompt variation. The
+   *  optional seed lets the caller steer the variant (e.g. by
+   *  passing the current shared prompt). The returned string
+   *  REPLACES the textarea contents (the user can still edit
+   *  before saving). */
+  onAutoPrompt: (seed?: string) => Promise<string>;
 }
 
 /**
@@ -38,11 +44,39 @@ export function ProductPromptModal({
   defaultPrompt,
   onClose,
   onSave,
+  onAutoPrompt,
 }: ProductPromptModalProps) {
   const [value, setValue] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  /** True while onAutoPrompt is in flight. Independent of saving
+   *  so the spinner on the AI button doesn't conflict with the
+   *  primary "Lưu" button's loading state. */
+  const [autoPrompting, setAutoPrompting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Hand the AI a seed that reflects where the user is now:
+  // existing override > shared prompt > "". The AI then writes
+  // a Vietnamese variation in the same lookbook style. The user
+  // can still edit the result before clicking Save.
+  const handleAutoPrompt = async () => {
+    const seed = (product?.prompt_override || defaultPrompt || "").trim();
+    setAutoPrompting(true);
+    setError(null);
+    try {
+      const fresh = await onAutoPrompt(seed || undefined);
+      setValue(fresh);
+      // Move the caret to the end so the user can keep typing.
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(fresh.length, fresh.length);
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAutoPrompting(false);
+    }
+  };
 
   // Reset the local draft when the modal target changes (open
   // for a different product) OR when the shared prompt changes
@@ -151,15 +185,36 @@ export function ProductPromptModal({
       >
         <div className="product-prompt-modal__header">
           <h3 className="product-prompt-modal__title">Sửa prompt cho sản phẩm này</h3>
-          <button
-            type="button"
-            className="image-preview-modal__close"
-            onClick={onClose}
-            aria-label="Đóng"
-            title="Đóng (Esc)"
-          >
-            ✕
-          </button>
+          <div className="product-prompt-modal__header-actions">
+            <button
+              type="button"
+              className="product-prompt-modal__autoprompt-btn"
+              onClick={handleAutoPrompt}
+              disabled={autoPrompting || saving}
+              title="Dùng MiniMax viết lại prompt theo mẫu mặc định"
+            >
+              {autoPrompting ? (
+                <>
+                  <span
+                    className="generation-board__inline-spinner"
+                    aria-hidden="true"
+                  />
+                  Đang tạo…
+                </>
+              ) : (
+                "Tự tạo prompt"
+              )}
+            </button>
+            <button
+              type="button"
+              className="image-preview-modal__close"
+              onClick={onClose}
+              aria-label="Đóng"
+              title="Đóng (Esc)"
+            >
+              ✕
+            </button>
+          </div>
         </div>
         <p className="product-prompt-modal__hint">
           {isEmpty

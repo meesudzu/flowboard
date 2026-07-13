@@ -619,6 +619,15 @@ export function GenerationBoard() {
         onSave={async (productId, promptOverride) => {
           await updateProduct(productId, { prompt_override: promptOverride });
         }}
+        onAutoPrompt={async (seed) => {
+          // Reuse the same store action the main prompt area
+          // uses — the backend endpoint accepts a seed so the
+          // modal can hand the AI the current shared prompt
+          // (or the product's existing override) instead of
+          // the hard-coded template. Same provider, same
+          // style, no duplicated wiring.
+          return await autoPrompt(seed);
+        }}
       />
 
       <div className="generation-board__action-bar">
