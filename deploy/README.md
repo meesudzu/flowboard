@@ -31,9 +31,10 @@ chuyển tiếp vào loopback.
 
 - VPS Linux (Debian 12 / Ubuntu 24.04 khuyến nghị)
 - Docker Engine ≥ 24 + plugin `docker compose`
-- Mở port 80 + 443 ra internet
+- Mở port 80 ra internet (Apache reverse-proxy → Caddy :8080)
 - DNS A/AAAA record trỏ `flow.runany.dev` về IP VPS **trước khi** chạy
 - MiniMax API key
+- Apache 2.4+ (chỉ cần nếu port 80 đã có sẵn — `install-vhost.sh` sẽ tự detect)
 
 ## Setup một lần trên VPS
 
@@ -141,6 +142,44 @@ $EDITOR .env             # đổi FLOWBOARD_DOMAIN
 - HSTS bật trong Caddyfile
 - WS server (`:9223`) **không có auth** theo design — được bảo vệ bởi
   guard rail `WS_HOST=127.0.0.1` trong code, không thể bind public
+
+## Setup khi port 80 đã có Apache
+
+Nếu VPS có sẵn Apache (CentOS/RHEL cài `httpd` theo mặc định), dùng
+Apache làm front door trên :80 và reverse-proxy sang Caddy :8080.
+Apache vẫn serve test page cho mọi domain khác.
+
+```bash
+cd ~/flowboard/deploy
+
+# 1. Cài vhost + reload Apache (auto-detect CentOS vs Debian)
+sudo ./apache/install-vhost.sh
+
+# 2. Đảm bảo Caddy listen :8080 nội bộ (đã có sẵn trong docker-compose.yml)
+docker compose up -d caddy
+
+# 3. Test
+curl -s http://flow.runany.dev/api/health
+# → {"ok":true,"extension_connected":false,...}
+
+curl -s http://127.0.0.1/  # IP → vẫn ra Apache test page
+```
+
+Flow:
+```
+Browser ──HTTPS──► Cloudflare (Flexible) ──HTTP:80──► Apache
+                                                       │
+                                                       │ ServerName flow.runany.dev
+                                                       │   ├─ RewriteRule ws://127.0.0.1:8080/ (WS)
+                                                       │   └─ ProxyPass  http://127.0.0.1:8080/  (HTTP)
+                                                       ▼
+                                                    Caddy :8080 ──► agent:8101 / :9223
+```
+
+WebSocket extension đi qua `RewriteRule [P]` (proxy pass), hoạt động
+với Chrome service worker bình thường.
+
+Nếu không muốn dùng Apache, xem **Setup với Cloudflare Tunnel** bên dưới.
 
 ## Troubleshooting
 
