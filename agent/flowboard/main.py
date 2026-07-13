@@ -39,14 +39,15 @@ if WS_HOST not in _allowed_hosts:
         f"FLOWBOARD_WS_HOST must be loopback (or 0.0.0.0 in container); got {WS_HOST!r}. "
         "The extension WS is unauthenticated by design."
     )
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
 if WS_HOST == "0.0.0.0":
     logger.warning(
         "FLOWBOARD_WS_HOST=0.0.0.0: WS server binds on all container interfaces. "
         "Docker network namespace still isolates from public internet."
     )
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 
 def _recover_orphan_running_requests() -> int:
