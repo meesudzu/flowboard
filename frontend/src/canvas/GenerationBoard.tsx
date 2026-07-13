@@ -524,29 +524,43 @@ export function GenerationBoard() {
           </button>
         ) : (
           <ul className="generation-board__product-grid">
-            {products.map((p) => (
-              <ProductTile
-                key={p.id}
-                product={p}
-                result={results[p.id]}
-                onRemove={() => {
-                  if (window.confirm("Xoá ảnh sản phẩm này? Kết quả tạo của nó cũng bị xoá.")) {
-                    removeProduct(p.id).catch(() => {});
-                  }
-                }}
-                onRegenerate={() => regenerateProduct(p.id).catch(() => {})}
-                onPreview={() => {
-                  setPreviewAlt(`Sản phẩm #${p.id}`);
-                  setPreviewMediaId(p.media_id);
-                }}
-              />
-            ))}
-            {pendingUploads.map((pu) => (
-              <PendingUploadTile
-                key={pu.clientId}
-                upload={pu}
-              />
-            ))}
+            {products.map((p) => {
+              // If the user JUST uploaded this product, there's a
+              // matching pending entry that the store linked by
+              // product_id. Pass its previewUrl + a "blurred"
+              // hint so the ProductTile keeps rendering the
+              // user's own base64 with the blur effect, then
+              // morphs to the server image once the pending
+              // entry is removed (~1.2s after upload). Same React
+              // key (p.id) on both sides = same DOM element, so
+              // the layout doesn't shift.
+              const linked = pendingUploads.find(
+                (pu) => pu.productId === p.id,
+              );
+              return (
+                <ProductTile
+                  key={p.id}
+                  product={p}
+                  result={results[p.id]}
+                  previewOverride={linked?.previewUrl}
+                  onRemove={() => {
+                    if (window.confirm("Xoá ảnh sản phẩm này? Kết quả tạo của nó cũng bị xoá.")) {
+                      removeProduct(p.id).catch(() => {});
+                    }
+                  }}
+                  onRegenerate={() => regenerateProduct(p.id).catch(() => {})}
+                  onPreview={() => {
+                    setPreviewAlt(`Sản phẩm #${p.id}`);
+                    setPreviewMediaId(p.media_id);
+                  }}
+                />
+              );
+            })}
+            {pendingUploads
+              .filter((pu) => pu.productId === undefined)
+              .map((pu) => (
+                <PendingUploadTile key={pu.clientId} upload={pu} />
+              ))}
             <li>
               <button
                 type="button"
@@ -621,20 +635,38 @@ export function GenerationBoard() {
 function ProductTile({
   product,
   result,
+  previewOverride,
   onRemove,
   onRegenerate,
   onPreview,
 }: {
   product: GenerationProduct;
   result: GenerationResult | undefined;
+  /** When set, render this base64 (or any URL) as the thumbnail
+   *  instead of resolving ``product.media_id`` through the media
+   *  endpoint. Used during the 1.2s "just uploaded" window so
+   *  the same tile morphs from preview to server image without
+   *  a layout swap. */
+  previewOverride?: string;
   onRemove: () => void;
   onRegenerate: () => void;
   onPreview: () => void;
 }) {
   const status = result?.status;
   const statusLabel = status ? PRODUCT_STATUS_LABEL[status] ?? status : null;
+  // While previewOverride is set, also mark the tile as "just
+  // uploaded" so the CSS blurs + dims the image. The blur eases
+  // out 1.2s later when the parent removes the matching pending
+  // entry, at which point previewOverride flips to undefined and
+  // the same <img> swaps src to the server image.
+  const justUploaded = Boolean(previewOverride);
   return (
-    <li className="generation-board__product-tile">
+    <li
+      className={
+        "generation-board__product-tile"
+        + (justUploaded ? " generation-board__product-tile--uploading" : "")
+      }
+    >
       <button
         type="button"
         className="generation-board__thumb-button generation-board__product-thumb"
@@ -642,7 +674,15 @@ function ProductTile({
         aria-label="Xem ảnh sản phẩm lớn"
         title="Bấm để xem lớn"
       >
-        <img src={mediaUrl(product.media_id)} alt="Sản phẩm" />
+        <img
+          src={previewOverride ?? mediaUrl(product.media_id)}
+          alt="Sản phẩm"
+          className={
+            justUploaded
+              ? "generation-board__product-thumb-img generation-board__product-thumb-img--uploading"
+              : "generation-board__product-thumb-img"
+          }
+        />
         {statusLabel && (
           <span
             className={
@@ -748,7 +788,7 @@ function ResultsGallery({
                   )}
                   <figcaption>
                     {r?.status === "done"
-                      ? `Xong ${r.finished_at ? formatTimestamp(r.finished_at) : ""}`
+                      ? `Xong${formatDuration(r.created_at, r.finished_at)}`
                       : "Kết quả"}
                   </figcaption>
                 </figure>
@@ -773,13 +813,28 @@ function ResultsGallery({
   );
 }
 
-function formatTimestamp(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
+function formatDuration(
+  createdAt: string | null | undefined,
+  finishedAt: string | null | undefined,
+): string {
+  // Render the elapsed time between created_at and finished_at as
+  // a short suffix for the "Xong" pill (e.g. " 5s", " 1m 20s",
+  // " 2m"). Returns an empty string if either timestamp is missing
+  // or the duration is non-positive.
+  //
+  // Bounded at 99 minutes so a runaway duration doesn't push the
+  // label past the figcaption width -- past that the user almost
+  // certainly knows it took a while and would rather see "99m+".
+  if (!createdAt || !finishedAt) return "";
+  const start = Date.parse(createdAt);
+  const end = Date.parse(finishedAt);
+  if (Number.isNaN(start) || Number.isNaN(end)) return "";
+  const seconds = Math.max(0, Math.round((end - start) / 1000));
+  if (seconds < 60) return ` ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remSec = seconds % 60;
+  if (remSec === 0) return minutes >= 99 ? " 99m+" : ` ${minutes}m`;
+  return minutes >= 99 ? " 99m+" : ` ${minutes}m ${remSec}s`;
 }
 
 

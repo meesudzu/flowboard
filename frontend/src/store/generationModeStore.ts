@@ -47,6 +47,13 @@ export interface PendingUpload {
   previewUrl: string;
   status: "uploading" | "done" | "failed";
   error?: string;
+  /** Set once the server has created the GenerationProduct row.
+   *  When present, the render merges this entry INTO the matching
+   *  ProductTile (same React key = same DOM element) so the user
+   *  sees the SAME tile morph from a blurred preview to a sharp
+   *  product over the 1.2s blur-out transition. No swap, no
+   *  layout jump. */
+  productId?: number;
 }
 
 export interface GenerationResult {
@@ -273,7 +280,13 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
       // message). We use the filename to match each result to the
       // optimistic PendingUpload entry.
       const data: {
-        products?: Array<{ filename?: string }>;
+        // Each product entry has the same shape as a
+        // GenerationProduct plus the ``filename`` we echoed back
+        // from the multipart form (the DB row doesn't store the
+        // original filename, so this is the only place to match
+        // it). The id is what the render keys on to merge the
+        // pending tile with the product tile.
+        products?: Array<{ id?: number; filename?: string }>;
         failures?: Array<{ filename: string; error: string }>;
       } = await res.json();
       const succeededNames = new Set<string>(
@@ -281,6 +294,17 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
           .map((p) => p.filename)
           .filter((n): n is string => Boolean(n))
       );
+      // filename -> product_id map for the just-uploaded rows. The
+      // render merges each pending entry into its product tile by
+      // id once we set productId here -- same React key = same DOM
+      // element, so the tile morphs from "pending preview" to
+      // "real product" without a layout jump.
+      const productIdByName = new Map<string, number>();
+      for (const p of data.products ?? []) {
+        if (typeof p.filename === "string" && typeof p.id === "number") {
+          productIdByName.set(p.filename, p.id);
+        }
+      }
       const failureByName = new Map<string, string>(
         (data.failures ?? []).map((f) => [f.filename, f.error])
       );
@@ -289,7 +313,15 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
         pendingUploads: s.pendingUploads.map((pu) => {
           if (!stillUploading.has(pu.filename)) return pu;
           if (succeededNames.has(pu.filename)) {
-            return { ...pu, status: "done" };
+            // Stamp the server-assigned product_id so the render
+            // can MERGE this pending entry into the matching
+            // ProductTile (same React key) instead of removing the
+            // tile and rendering a new one in its place.
+            return {
+              ...pu,
+              status: "done",
+              productId: productIdByName.get(pu.filename),
+            };
           }
           return {
             ...pu,
