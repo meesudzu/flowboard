@@ -5924,6 +5924,20 @@ button:disabled {
   color: #fda4af;
 }
 
+/* "✎" button: lights up when the product has a non-empty
+ * prompt_override. Same hue as the accent so it reads as
+ * "this product diverges from the default". */
+.generation-board__icon-btn--active {
+  background: rgba(139, 92, 246, 0.22);
+  color: #c5b3ff;
+  border-color: rgba(139, 92, 246, 0.55);
+}
+
+.generation-board__icon-btn--active:hover {
+  background: rgba(139, 92, 246, 0.32);
+  color: #d6c4ff;
+}
+
 .generation-board__product-add {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -6048,35 +6062,41 @@ button:disabled {
    * so its `left` must skip past the sidebar — see `--sidebar-width`
    * on .app. The 16px right gutter mirrors the .generation-board
    * padding so the bar's right edge aligns with the content area.
-   * Using `right: 16px` here (instead of `right: 16px` with a
-   * fixed left) means the bar automatically resizes with the
-   * viewport instead of overflowing. */
+   * Using `right: 16px` here means the bar automatically resizes
+   * with the viewport instead of overflowing. */
   left: calc(var(--sidebar-width, 220px) + 16px);
   right: 16px;
   bottom: 12px;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
+  /* The bar is now just a single primary button. No flex row, no
+   * progress text -- the user gets the action and a tooltip on
+   * hover. The container is still visible (background, border,
+   * shadow) so the button reads as a docked footer rather than a
+   * floating control. */
+  padding: 10px;
   background: rgba(20, 20, 28, 0.92);
   border: 1px solid var(--border, #34344a);
   border-radius: 12px;
-  /* Soft glass so the gallery behind the bar is still readable if
-   * the user happens to be on the last row when the bar docks to
-   * the bottom of the viewport. */
+  /* Soft glass so the gallery behind the bar is still readable
+   * when the user is on the last row. */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   /* Drop-shadow upward so the bar visually floats over the gallery
-   * rather than feeling like a chunk of opaque rectangle stuck to
-   * the page. */
+   * rather than feeling like a chunk of opaque rectangle stuck
+   * to the page. */
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.generation-board__progress {
-  flex: 1;
-  color: var(--muted, #9b9bb5);
-  font-size: 12.5px;
+/* The primary CTA stretches to fill the bar so the user has a
+ * large tap target without losing the "fixed footer" framing.
+ * Min-width keeps it from collapsing to a tiny pill on
+ * narrow viewports. */
+.generation-board__generate-btn {
+  width: 100%;
+  min-width: 180px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* ── Inline spinner + thumb overlay (used during uploads) ─────────────── */
@@ -6149,6 +6169,92 @@ button:disabled {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
   cursor: default;
   user-select: none;
+}
+
+/* ── Per-product prompt override modal ─────────────────────────────
+ *
+ * Reuses the .image-preview-modal backdrop (position: fixed,
+ * full viewport, click-outside-to-dismiss). The actual content
+ * is a centred card with a header (title + ✕ close), a hint
+ * explaining what an override does, the textarea, an error slot,
+ * and a Huỷ / Lưu button row.
+ */
+.product-prompt-modal__panel {
+  position: relative;
+  width: min(640px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  background: var(--panel, #1c1c25);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  color: var(--fg, #f3f3fa);
+  overflow: hidden;
+}
+
+.product-prompt-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.product-prompt-modal__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.product-prompt-modal__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted, #9b9bb5);
+  line-height: 1.5;
+}
+
+.product-prompt-modal__textarea {
+  flex: 1 1 auto;
+  min-height: 220px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #34344a);
+  border-radius: 10px;
+  background: #14141b;
+  color: var(--fg, #f3f3fa);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.product-prompt-modal__textarea:focus {
+  outline: none;
+  border-color: var(--accent, #8b5cf6);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.18);
+}
+
+.product-prompt-modal__textarea::placeholder {
+  color: var(--muted, #6c6c80);
+  font-style: italic;
+}
+
+.product-prompt-modal__error {
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.product-prompt-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .image-preview-modal__caption {

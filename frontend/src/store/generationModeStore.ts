@@ -16,6 +16,13 @@ export interface GenerationProduct {
   media_id: string;
   position: number;
   label: string;
+  /** Per-product prompt override. Empty string = use the shared
+   *  config prompt. Non-empty = the worker uses this text
+   *  INSTEAD of the shared prompt for this product only (other
+   *  products in the same batch are unaffected). The frontend
+   *  exposes a small "✎" button on each product tile to edit
+   *  this. */
+  prompt_override: string;
   uploaded_at: string | null;
 }
 
@@ -105,6 +112,11 @@ export interface GenerationModeState {
   removeModel(): Promise<void>;
   addProducts(files: File[] | FileList): Promise<void>;
   removeProduct(productId: number): Promise<void>;
+  /** Update per-product metadata. Either field may be omitted. */
+  updateProduct(
+    productId: number,
+    patch: { label?: string; prompt_override?: string },
+  ): Promise<void>;
   updatePrompt(prompt: string): Promise<void>;
   autoPrompt(seed?: string): Promise<string>;
   updateAspectRatio(aspect: GenerationConfig["aspect_ratio"]): Promise<void>;
@@ -379,6 +391,23 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
       method: "DELETE",
     });
     await get().refresh();
+  },
+
+  async updateProduct(productId, patch) {
+    const bid = get().boardId;
+    if (bid === null) return;
+    const updated = await api<GenerationProduct>(
+      `/api/boards/${bid}/generation-mode/products/${productId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    );
+    // Update the in-memory list in place so the "✎" icon flips
+    // on/off immediately without waiting for the next poll.
+    set((s) => ({
+      products: s.products.map((p) => (p.id === productId ? updated : p)),
+    }));
   },
 
   async updatePrompt(prompt) {

@@ -212,12 +212,23 @@ class GenerationProduct(SQLModel, table=True):
     ``position`` integer (assigned at upload time, monotonically
     increasing) so the gallery renders in upload order without ORDER BY
     RANDOM() or relying on ``created_at`` ties.
+
+    ``prompt_override`` is a per-product override of the board's
+    shared config prompt. When non-empty, the worker uses it INSTEAD
+    of ``GenerationConfig.prompt`` for this product only; other
+    products in the same batch still get the shared prompt. An
+    empty string means "use the shared prompt". This lets the
+    user tweak the prompt for one product (e.g. a different pose
+    for a particular garment) without changing the whole batch.
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     board_id: int = Field(foreign_key="board.id", index=True)
     media_id: str
     position: int = 0
     label: str = ""
+    # Per-product prompt override. See class docstring. Empty by
+    # default so existing rows keep using the shared config prompt.
+    prompt_override: str = ""
     uploaded_at: datetime = Field(default_factory=_utcnow)
 
 

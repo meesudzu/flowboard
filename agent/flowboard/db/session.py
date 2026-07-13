@@ -61,6 +61,20 @@ def init_db() -> None:
                 )
                 conn.commit()
 
+        # Migration 3: GenerationProduct.prompt_override — added when
+        # per-product prompt overrides shipped. Empty string = use
+        # the shared config prompt; non-empty = use the override for
+        # this product only. Like the other migrations this is
+        # non-destructive: existing rows get the SQL default
+        # ('') and immediately fall back to the shared prompt.
+        if insp.has_table("generationproduct"):
+            gp_cols = {c["name"] for c in insp.get_columns("generationproduct")}
+            if "prompt_override" not in gp_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE generationproduct ADD COLUMN prompt_override VARCHAR DEFAULT ''"
+                )
+                conn.commit()
+
     SQLModel.metadata.create_all(engine)
 
 

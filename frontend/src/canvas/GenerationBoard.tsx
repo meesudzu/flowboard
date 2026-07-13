@@ -14,6 +14,7 @@ import { useBoardStore } from "../store/board";
 import { useSettingsStore, type ImageModelKey } from "../store/settings";
 import { mediaUrl } from "../api/client";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
+import { ProductPromptModal } from "../components/ProductPromptModal";
 
 const PRODUCT_STATUS_LABEL: Record<string, string> = {
   pending: "Đang chờ",
@@ -77,6 +78,7 @@ export function GenerationBoard() {
   const updateImageModel = useGenerationModeStore((s) => s.updateImageModel);
   const startGeneration = useGenerationModeStore((s) => s.startGeneration);
   const regenerateProduct = useGenerationModeStore((s) => s.regenerateProduct);
+  const updateProduct = useGenerationModeStore((s) => s.updateProduct);
 
   const settingsImageModel = useSettingsStore((s) => s.imageModel);
   const setSettingsImageModel = useSettingsStore((s) => s.setImageModel);
@@ -93,6 +95,11 @@ export function GenerationBoard() {
    *  whichever is set. */
   const [previewBase64, setPreviewBase64] = useState<string | null>(null);
   const [previewAlt, setPreviewAlt] = useState<string | undefined>(undefined);
+  /** When set, opens the per-product prompt override modal for
+   *  this product. The user can type a custom prompt that the
+   *  worker uses INSTEAD of the shared config prompt for this
+   *  product only. */
+  const [editingPromptProductId, setEditingPromptProductId] = useState<number | null>(null);
 
   // Track when the latest in-flight batch started so we can compute
   // the poll cadence per tick (FAST for the first 30s, SLOW after).
@@ -553,6 +560,7 @@ export function GenerationBoard() {
                     setPreviewAlt(`Sản phẩm #${p.id}`);
                     setPreviewMediaId(p.media_id);
                   }}
+                  onEditPrompt={() => setEditingPromptProductId(p.id)}
                 />
               );
             })}
@@ -600,19 +608,23 @@ export function GenerationBoard() {
         }}
       />
 
+      <ProductPromptModal
+        product={
+          editingPromptProductId === null
+            ? null
+            : products.find((p) => p.id === editingPromptProductId) ?? null
+        }
+        defaultPrompt={config.prompt}
+        onClose={() => setEditingPromptProductId(null)}
+        onSave={async (productId, promptOverride) => {
+          await updateProduct(productId, { prompt_override: promptOverride });
+        }}
+      />
+
       <div className="generation-board__action-bar">
-        <div className="generation-board__progress">
-          {inFlightCount > 0
-            ? `Đang tạo ${inFlightCount}…`
-            : pendingCount > 0
-            ? `${pendingCount} ảnh mới sẵn sàng để tạo`
-            : products.length > 0
-            ? `Tất cả ${products.length} ảnh đã hoàn thành`
-            : "Chưa có ảnh sản phẩm nào"}
-        </div>
         <button
           type="button"
-          className="project-modal__btn project-modal__btn--primary"
+          className="project-modal__btn project-modal__btn--primary generation-board__generate-btn"
           onClick={() => startGeneration()}
           disabled={!canGenerate}
           title={pendingCount === 0
@@ -639,6 +651,7 @@ function ProductTile({
   onRemove,
   onRegenerate,
   onPreview,
+  onEditPrompt,
 }: {
   product: GenerationProduct;
   result: GenerationResult | undefined;
@@ -651,7 +664,10 @@ function ProductTile({
   onRemove: () => void;
   onRegenerate: () => void;
   onPreview: () => void;
+  /** Open the per-product prompt override modal for this tile. */
+  onEditPrompt: () => void;
 }) {
+  const hasOverride = product.prompt_override.length > 0;
   const status = result?.status;
   const statusLabel = status ? PRODUCT_STATUS_LABEL[status] ?? status : null;
   // While previewOverride is set, also mark the tile as "just
@@ -703,6 +719,28 @@ function ProductTile({
           title="Tạo lại ảnh này"
         >
           ⟳
+        </button>
+        <button
+          type="button"
+          className={
+            "generation-board__icon-btn"
+            + (hasOverride
+              ? " generation-board__icon-btn--active"
+              : "")
+          }
+          onClick={onEditPrompt}
+          aria-label={
+            hasOverride
+              ? "Sửa prompt override (đang dùng prompt riêng)"
+              : "Sửa prompt cho ảnh này"
+          }
+          title={
+            hasOverride
+              ? "Đang dùng prompt riêng — bấm để sửa"
+              : "Sửa prompt cho ảnh này"
+          }
+        >
+          ✎
         </button>
         <button
           type="button"

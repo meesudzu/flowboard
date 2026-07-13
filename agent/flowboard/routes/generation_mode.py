@@ -124,6 +124,12 @@ def _serialize_product(p: GenerationProduct) -> dict[str, Any]:
         "media_id": p.media_id,
         "position": p.position,
         "label": p.label,
+        # Per-product prompt override. Empty string means "use the
+        # shared config prompt" (the worker uses the override only
+        # when this is non-empty). The frontend renders an "✎" icon
+        # on the product tile when this is set so the user can see
+        # at a glance which products diverge from the default.
+        "prompt_override": p.prompt_override,
         "uploaded_at": p.uploaded_at.isoformat() if p.uploaded_at else None,
     }
 
@@ -358,6 +364,54 @@ async def upload_products(board_id: int, files: list[UploadFile] = File(...)):
     return {"products": products, "failures": failures}
 
 
+class ProductPatch(BaseModel):
+    label: Optional[str] = None
+    prompt_override: Optional[str] = None
+
+
+@router.patch("/products/{product_id}")
+def patch_product(board_id: int, product_id: int, body: ProductPatch):
+    """Update per-product metadata (label and/or prompt override).
+
+    Either field may be omitted; the other is left untouched. An
+    empty ``prompt_override`` string means "use the shared config
+    prompt" — the worker treats empty as "no override". Both
+    fields are length-bounded so a runaway client can't push a
+    multi-megabyte text into the DB row.
+    """
+    if body.label is None and body.prompt_override is None:
+        raise HTTPException(400, "at least one of label/prompt_override is required")
+    # Per-field caps. The shared config prompt is 1-2 KB; per-product
+    # overrides are usually shorter, but allow some headroom for
+    # tweaks without inviting abuse.
+    _MAX_LABEL = 200
+    _MAX_OVERRIDE = 4_000
+    if body.label is not None and len(body.label) > _MAX_LABEL:
+        raise HTTPException(
+            400,
+            f"label too long: {len(body.label)} > {_MAX_LABEL}",
+        )
+    if body.prompt_override is not None and len(body.prompt_override) > _MAX_OVERRIDE:
+        raise HTTPException(
+            400,
+            f"prompt_override too long: {len(body.prompt_override)} > {_MAX_OVERRIDE}",
+        )
+    with get_session() as s:
+        prod = s.get(GenerationProduct, product_id)
+        if prod is None or prod.board_id != board_id:
+            raise HTTPException(404, "product not found in this project")
+        if body.label is not None:
+            prod.label = body.label
+        if body.prompt_override is not None:
+            # Treat whitespace-only as empty so the worker falls back
+            # to the shared config prompt in the obvious way.
+            prod.prompt_override = (body.prompt_override or "").strip()
+        s.add(prod)
+        s.commit()
+        s.refresh(prod)
+    return _serialize_product(prod)
+
+
 @router.delete("/products/{product_id}")
 def delete_product(board_id: int, product_id: int):
     """Remove one product (and all of its generation results).
@@ -492,7 +546,15 @@ def _enqueue_one(board_id: int, product_id: int) -> dict[str, int]:
         if not is_valid_project_id(flow_project_id):
             raise HTTPException(500, f"stored flow project id invalid: {flow_project_id!r}")
 
-        prompt = _build_prompt(cfg.prompt, prod.label)
+        # Per-product override: if the user set a prompt_override
+        # on this product, use it INSTEAD of the shared config
+        # prompt. The structured prefix + label clause still come
+        # from _build_prompt so the model knows which ref image is
+        # the model and which is the product -- only the body of
+        # the caption changes. Other products in the same batch
+        # are unaffected and still see cfg.prompt.
+        prompt_source = prod.prompt_override or cfg.prompt
+        prompt = _build_prompt(prompt_source, prod.label)
 
         result = GenerationResult(
             board_id=board_id,
@@ -588,7 +650,14 @@ def _enqueue_batch(board_id: int, product_ids: list[int]) -> dict[str, list[int]
                 "id": p.id,
                 "media_id": p.media_id,
                 "label": p.label,
-                "prompt": _build_prompt(cfg.prompt, p.label),
+                # Same per-product override as _enqueue_one: a
+                # non-empty prompt_override replaces the shared
+                # cfg.prompt for this product only. Other products
+                # in the same batch are unaffected.
+                "prompt": _build_prompt(
+                    (p.prompt_override or "").strip() or cfg.prompt,
+                    p.label,
+                ),
             }
             for p in (products[pid] for pid in product_ids)
         ]

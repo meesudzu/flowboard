@@ -1396,3 +1396,136 @@ def test_explicit_product_ids_bypasses_done_filter(client):
             )
             assert rows[0].status == "pending"
             assert rows[1].status == "done"
+
+
+# ── Per-product prompt override ─────────────────────────────────────
+
+def test_patch_product_prompt_override_writes_and_returns_row(client):
+    """The per-product prompt override PATCH endpoint validates
+    input length, writes the row, and returns the updated product
+    so the store can update its in-memory list without a full
+    refresh.
+    """
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct
+    from sqlmodel import select as _select
+
+    b = _seed_board_with_products(client, n_products=1)
+    bid = b["id"]
+    with get_session() as s:
+        prod = s.exec(_select(GenerationProduct).where(
+            GenerationProduct.board_id == bid
+        )).first()
+        pid = prod.id
+        # Default is empty string (= use shared config prompt).
+        assert prod.prompt_override == ""
+
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={"prompt_override": "Đứng nghiêng, tay chống hông."},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["id"] == pid
+    assert body["prompt_override"] == "Đứng nghiêng, tay chống hông."
+
+    # And the row is persisted on disk.
+    with get_session() as s:
+        prod = s.get(GenerationProduct, pid)
+        assert prod.prompt_override == "Đứng nghiêng, tay chống hông."
+
+
+def test_patch_product_clears_override_on_empty_string(client):
+    """An empty prompt_override means \"use the shared config
+    prompt again\". Whitespace-only is normalised to empty so
+    the worker's truthy check stays simple.
+    """
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct
+    from sqlmodel import select as _select
+
+    b = _seed_board_with_products(client, n_products=1)
+    bid = b["id"]
+    with get_session() as s:
+        prod = s.exec(_select(GenerationProduct).where(
+            GenerationProduct.board_id == bid
+        )).first()
+        pid = prod.id
+
+    # Set then clear.
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={"prompt_override": "có gì đó"},
+    )
+    assert r.status_code == 200
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={"prompt_override": ""},
+    )
+    assert r.status_code == 200
+    assert r.json()["prompt_override"] == ""
+
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={"prompt_override": "   \n  "},
+    )
+    assert r.status_code == 200
+    assert r.json()["prompt_override"] == ""
+
+
+def test_patch_product_rejects_oversize_prompt(client):
+    """Length cap so a runaway client can't push a multi-MB string
+    into the DB row.
+    """
+    b = _seed_board_with_products(client, n_products=1)
+    bid = b["id"]
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct
+    from sqlmodel import select as _select
+    with get_session() as s:
+        prod = s.exec(_select(GenerationProduct).where(
+            GenerationProduct.board_id == bid
+        )).first()
+        pid = prod.id
+    huge = "x" * 5_000  # > 4_000 cap
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={"prompt_override": huge},
+    )
+    assert r.status_code == 400
+
+
+def test_patch_product_rejects_empty_body(client):
+    b = _seed_board_with_products(client, n_products=1)
+    bid = b["id"]
+    from flowboard.db import get_session
+    from flowboard.db.models import GenerationProduct
+    from sqlmodel import select as _select
+    with get_session() as s:
+        prod = s.exec(_select(GenerationProduct).where(
+            GenerationProduct.board_id == bid
+        )).first()
+        pid = prod.id
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/{pid}",
+        json={},
+    )
+    assert r.status_code == 400
+
+
+def test_patch_product_unknown_id_returns_404(client):
+    b = _seed_board_with_products(client, n_products=0) if hasattr(
+        _seed_board_with_products, "__call__"
+    ) else None
+    # If the helper requires products, just create a board directly.
+    from flowboard.db import get_session
+    from flowboard.db.models import Board
+    with get_session() as s:
+        b = Board(name="x", mode="generate")
+        s.add(b); s.commit(); s.refresh(b)
+        bid = b.id
+    r = client.patch(
+        f"/api/boards/{bid}/generation-mode/products/9999",
+        json={"prompt_override": "x"},
+    )
+    assert r.status_code == 404
