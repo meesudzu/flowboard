@@ -38,9 +38,17 @@ fi
 
 cp -v "$SRC" "$DST"
 
-# Enable proxy modules (Debian needs explicit a2enmod; CentOS loads by default)
+# Enable proxy modules. Debian uses a2enmod; CentOS loads most by default
+# but mod_proxy_wstunnel sometimes needs an explicit LoadModule drop-in.
 if [[ "$DISTRO" == "debian" ]]; then
-    a2enmod proxy proxy_http rewrite
+    a2enmod proxy proxy_http proxy_wstunnel rewrite
+else
+    # CentOS/RHEL: ensure proxy_wstunnel is loaded
+    if ! httpd -M 2>/dev/null | grep -q proxy_wstunnel_module; then
+        echo "── loading mod_proxy_wstunnel ──"
+        echo "LoadModule proxy_wstunnel_module modules/mod_proxy_wstunnel.so" \
+            > /etc/httpd/conf.modules.d/00-proxy_wstunnel.conf
+    fi
 fi
 
 # Test config
