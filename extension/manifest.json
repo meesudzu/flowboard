@@ -7,10 +7,8 @@
   "host_permissions": [
     "https://aisandbox-pa.googleapis.com/*",
     "https://labs.google/*",
-    "http://127.0.0.1:8101/*",
-    "http://localhost:8101/*",
-    "ws://127.0.0.1:9223/*",
-    "ws://localhost:9223/*"
+    "https://flow.runany.dev/*",
+    "wss://flow.runany.dev/*"
   ],
   "background": {
     "service_worker": "background.js"

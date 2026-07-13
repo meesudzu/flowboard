@@ -87,8 +87,10 @@ cmd_up() {
     # Make sure secrets dir exists with sane perms even if empty
     mkdir -p secrets && [[ -f secrets/secrets.json ]] && chmod 600 secrets/secrets.json || true
 
-    # docker compose v2: `up` with -d for detached
-    docker compose "${@}" up --build
+    # docker compose v2: `up` accepts flags AFTER the subcommand.
+    # `./deploy.sh up -d` → `docker compose up --build -d` (detached)
+    # `./deploy.sh up`     → `docker compose up --build`         (foreground)
+    docker compose up --build "$@"
 }
 
 # ── down ────────────────────────────────────────────────────────────
@@ -166,22 +168,47 @@ cmd_patch_extension() {
 import json, pathlib, sys, re
 ext_dir, url, ws_url = sys.argv[1:]
 
-# 1) manifest.json — replace loopback http://127.0.0.1:8101 and ws://127.0.0.1:9223
+# 1) manifest.json — preserve original formatting. Do scoped text surgery
+#    on just the host_permissions block; don't re-serialize the whole JSON.
 mp = pathlib.Path(ext_dir) / "manifest.json"
-m = json.loads(mp.read_text())
-new_hp = []
-for h in m["host_permissions"]:
-    if h.startswith("http://127.0.0.1:8101") or h.startswith("http://localhost:8101"):
-        new_hp.append(f"{url}/*")
-    elif h.startswith("ws://127.0.0.1:9223") or h.startswith("ws://localhost:9223"):
-        new_hp.append(f"{ws_url}/*")
-    else:
-        new_hp.append(h)
-# Deduplicate while preserving order
-seen = set(); new_hp = [x for x in new_hp if not (x in seen or seen.add(x))]
-m["host_permissions"] = new_hp
-mp.write_text(json.dumps(m, indent=2) + "\n")
-print(f"  • manifest.json host_permissions updated")
+text = mp.read_text()
+
+# Find the host_permissions array block (greedy on inner contents).
+m_hp = re.search(
+    r'("host_permissions"\s*:\s*)\[(.*?)\]',
+    text, flags=re.DOTALL,
+)
+if not m_hp:
+    print("  • manifest.json: host_permissions block not found — skipped")
+else:
+    prefix, inner = m_hp.group(1), m_hp.group(2)
+    # Pull out individual string entries (each is "..." line).
+    entries = re.findall(r'"([^"]+)"', inner)
+    # Map loopback → prod URL
+    new_entries = []
+    for e in entries:
+        if e.startswith("http://127.0.0.1:8101") or e.startswith("http://localhost:8101"):
+            new_entries.append(f"{url}/*")
+        elif e.startswith("ws://127.0.0.1:9223") or e.startswith("ws://localhost:9223"):
+            new_entries.append(f"{ws_url}/*")
+        else:
+            new_entries.append(e)
+    # Dedup while preserving order
+    seen, deduped = set(), []
+    for e in new_entries:
+        if e not in seen:
+            seen.add(e); deduped.append(e)
+    # Re-render the array using the file's existing comma style:
+    # pick up the leading whitespace of the first entry from `inner`
+    indent_match = re.search(r'\n(\s+)"', inner)
+    indent = indent_match.group(1) if indent_match else "    "
+    rendered_inner = "".join(f'\n{indent}"{e}",' for e in deduped[:-1])
+    rendered_inner += f'\n{indent}"{deduped[-1]}"'  # last entry no trailing comma
+    new_block = prefix + "[" + rendered_inner + "\n  ]"  # closing bracket on own line
+    text = text[:m_hp.start()] + new_block + text[m_hp.end():]
+    mp.write_text(text)
+    json.loads(text)  # validate
+    print(f"  • manifest.json host_permissions → {len(deduped)} entries (preserved formatting)")
 
 # 2) background.js — replace AGENT_WS_URL and CALLBACK_URL
 bp = pathlib.Path(ext_dir) / "background.js"
