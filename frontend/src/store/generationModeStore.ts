@@ -416,13 +416,31 @@ export const useGenerationModeStore = create<GenerationModeState>((set, get) => 
         { method: "POST", body: JSON.stringify({}) },
       );
       set({ activeRequestIds: out.request_ids });
-      // Optimistically mark all pending products as pending in the local
-      // cache so the UI immediately re-renders. A refresh picks up the
-      // server-side truth on next poll.
+      // Optimistically mark NEW products as pending in the local
+      // cache so the UI immediately re-renders. A refresh picks up
+      // the server-side truth on the next poll tick.
+      //
+      // The previous version of this loop reset every product to
+      // "pending" — including ones the server would SKIP because
+      // they already had a ``done`` row. That made the "Xong" pill
+      // flicker to "Đang chờ" for a second or two after every
+      // click (until the next poll restored the server truth),
+      // which the user found jarring. Now we only reset rows that
+      // are still actionable from the worker's perspective:
+      //
+      //   * no result row        -> new product, needs a "pending"
+      //   * status == "failed"  -> retrying; show in-flight state
+      //   * status == "canceled" -> re-enqueueing after a stop
+      //
+      // ``done``, ``running``, ``queued`` rows are left alone — the
+      // server won't touch them on this dispatch.
       const products = get().products;
       const results = { ...get().results };
       for (const p of products) {
-        if (!results[p.id] || results[p.id].status !== "pending") {
+        const cur = results[p.id];
+        const needsPending =
+          !cur || cur.status === "failed" || cur.status === "canceled";
+        if (needsPending) {
           results[p.id] = {
             id: 0,
             board_id: bid,

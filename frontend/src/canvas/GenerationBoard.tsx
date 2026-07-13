@@ -249,6 +249,16 @@ export function GenerationBoard() {
       <section className="generation-board__input-row">
         {/* ── Model column (left) ───────────────────────────────────── */}
         <div className="generation-board__input-col generation-board__input-col--model">
+          <div className="generation-board__model-header">
+            <h2 className="generation-board__subtitle">Ảnh Người Mẫu</h2>
+            {uploadingModel && (
+              <span
+                className="generation-board__inline-spinner"
+                aria-label="Đang upload model"
+                title="Đang upload model"
+              />
+            )}
+          </div>
           <div
             className={
               "generation-board__model-drop" +
@@ -321,9 +331,6 @@ export function GenerationBoard() {
                   >
                     {uploadingModel ? "Đang upload…" : "Thay ảnh"}
                   </button>
-                  <span className="generation-board__model-hint">
-                    Ảnh Người Mẫu
-                  </span>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -517,12 +524,6 @@ export function GenerationBoard() {
           </button>
         ) : (
           <ul className="generation-board__product-grid">
-            {pendingUploads.map((pu) => (
-              <PendingUploadTile
-                key={pu.clientId}
-                upload={pu}
-              />
-            ))}
             {products.map((p) => (
               <ProductTile
                 key={p.id}
@@ -538,6 +539,12 @@ export function GenerationBoard() {
                   setPreviewAlt(`Sản phẩm #${p.id}`);
                   setPreviewMediaId(p.media_id);
                 }}
+              />
+            ))}
+            {pendingUploads.map((pu) => (
+              <PendingUploadTile
+                key={pu.clientId}
+                upload={pu}
               />
             ))}
             <li>
