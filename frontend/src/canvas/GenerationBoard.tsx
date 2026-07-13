@@ -15,6 +15,7 @@ import { useSettingsStore, type ImageModelKey } from "../store/settings";
 import { mediaUrl } from "../api/client";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { ProductPromptModal } from "../components/ProductPromptModal";
+import { PromptViewerModal } from "../components/PromptViewerModal";
 
 const PRODUCT_STATUS_LABEL: Record<string, string> = {
   pending: "Đang chờ",
@@ -100,6 +101,11 @@ export function GenerationBoard() {
    *  worker uses INSTEAD of the shared config prompt for this
    *  product only. */
   const [editingPromptProductId, setEditingPromptProductId] = useState<number | null>(null);
+  /** When non-null, opens the read-only prompt viewer for the
+   *  exact prompt string the worker sent to Flow. Kept as a
+   *  small object so the modal can show the product id and a
+   *  useful title alongside the prompt text. */
+  const [viewingPrompt, setViewingPrompt] = useState<{ productId: number; prompt: string } | null>(null);
 
   // Track when the latest in-flight batch started so we can compute
   // the poll cadence per tick (FAST for the first 30s, SLOW after).
@@ -560,7 +566,20 @@ export function GenerationBoard() {
                     setPreviewAlt(`Sản phẩm #${p.id}`);
                     setPreviewMediaId(p.media_id);
                   }}
+                  onPreviewResult={() => {
+                    const r = results[p.id];
+                    if (r?.output_media_id) {
+                      setPreviewAlt(`Kết quả tạo ảnh #${p.id}`);
+                      setPreviewMediaId(r.output_media_id);
+                    }
+                  }}
                   onEditPrompt={() => setEditingPromptProductId(p.id)}
+                  onViewPrompt={() => {
+                    const r = results[p.id];
+                    if (r?.prompt_used) {
+                      setViewingPrompt({ productId: p.id, prompt: r.prompt_used });
+                    }
+                  }}
                 />
               );
             })}
@@ -583,18 +602,9 @@ export function GenerationBoard() {
         )}
       </section>
 
-      <ResultsGallery
-        products={products}
-        results={results}
-        onRegenerate={(pid) => regenerateProduct(pid).catch(() => {})}
-        onPreviewProduct={(mid) => {
-          setPreviewAlt("Ảnh sản phẩm gốc");
-          setPreviewMediaId(mid);
-        }}
-        onPreviewOutput={(r) => {
-          setPreviewAlt(`Kết quả tạo ảnh #${r.product_id}`);
-          setPreviewMediaId(r.output_media_id);
-        }}
+      <PromptViewerModal
+        prompt={viewingPrompt}
+        onClose={() => setViewingPrompt(null)}
       />
 
       <ImagePreviewModal
@@ -660,7 +670,9 @@ function ProductTile({
   onRemove,
   onRegenerate,
   onPreview,
+  onPreviewResult,
   onEditPrompt,
+  onViewPrompt,
 }: {
   product: GenerationProduct;
   result: GenerationResult | undefined;
@@ -672,11 +684,40 @@ function ProductTile({
   previewOverride?: string;
   onRemove: () => void;
   onRegenerate: () => void;
+  /** Open the full-viewport preview of the source product image. */
   onPreview: () => void;
+  /** Open the full-viewport preview of the generated result image
+   *  (only meaningful when result.output_media_id is set). */
+  onPreviewResult: () => void;
   /** Open the per-product prompt override modal for this tile. */
   onEditPrompt: () => void;
+  /** Open the read-only prompt viewer (shows the exact prompt
+   *  string the worker sent to Flow for this product). */
+  onViewPrompt: () => void;
 }) {
   const hasOverride = product.prompt_override.length > 0;
+  // True only when the latest result is a finished generation.
+  // Drives both the result thumbnail and the "Xem prompt"
+  // button (no point showing either when nothing ran yet).
+  const hasOutput =
+    result?.status === "done" && Boolean(result.output_media_id);
+  // Short status label for the result placeholder. Same
+  // vocabulary as the product pill so the user only learns
+  // it once.
+  const resultStatus = result?.status;
+  const resultLabel = !result
+    ? "Chưa tạo"
+    : resultStatus === "done"
+    ? `Xong${formatDuration(result.created_at, result.finished_at)}`
+    : resultStatus === "failed"
+    ? "Lỗi"
+    : resultStatus === "running" || resultStatus === "queued"
+    ? "Đang tạo…"
+    : resultStatus === "pending"
+    ? "Đang chờ"
+    : resultStatus === "canceled"
+    ? "Đã huỷ"
+    : "—";
   const status = result?.status;
   const statusLabel = status ? PRODUCT_STATUS_LABEL[status] ?? status : null;
   // While previewOverride is set, also mark the tile as "just
@@ -692,33 +733,73 @@ function ProductTile({
         + (justUploaded ? " generation-board__product-tile--uploading" : "")
       }
     >
-      <button
-        type="button"
-        className="generation-board__thumb-button generation-board__product-thumb"
-        onClick={() => onPreview()}
-        aria-label="Xem ảnh sản phẩm lớn"
-        title="Bấm để xem lớn"
-      >
-        <img
-          src={previewOverride ?? mediaUrl(product.media_id)}
-          alt="Sản phẩm"
-          className={
-            justUploaded
-              ? "generation-board__product-thumb-img generation-board__product-thumb-img--uploading"
-              : "generation-board__product-thumb-img"
-          }
-        />
-        {statusLabel && (
-          <span
+      <div className="generation-board__product-pair">
+        <button
+          type="button"
+          className="generation-board__thumb-button generation-board__product-thumb"
+          onClick={() => onPreview()}
+          aria-label="Xem ảnh sản phẩm lớn"
+          title="Bấm để xem lớn"
+        >
+          <img
+            src={previewOverride ?? mediaUrl(product.media_id)}
+            alt="Sản phẩm"
             className={
-              "generation-board__product-pill generation-board__product-pill--" +
-              (status ?? "idle")
+              justUploaded
+                ? "generation-board__product-thumb-img generation-board__product-thumb-img--uploading"
+                : "generation-board__product-thumb-img"
             }
-          >
-            {statusLabel}
-          </span>
-        )}
-      </button>
+          />
+          {statusLabel && (
+            <span
+              className={
+                "generation-board__product-pill generation-board__product-pill--" +
+                (status ?? "idle")
+              }
+            >
+              {statusLabel}
+            </span>
+          )}
+          <span className="generation-board__product-side-label">Sản phẩm</span>
+        </button>
+        <div
+          className={
+            "generation-board__result-side"
+            + (result?.status === "failed"
+              ? " generation-board__result-side--failed"
+              : "")
+          }
+        >
+          {hasOutput ? (
+            <button
+              type="button"
+              className="generation-board__thumb-button generation-board__result-thumb"
+              onClick={() => onPreviewResult()}
+              aria-label="Xem ảnh kết quả lớn"
+              title="Bấm để xem lớn"
+            >
+              <img
+                src={mediaUrl(result!.output_media_id as string)}
+                alt="Kết quả tạo ảnh"
+              />
+            </button>
+          ) : (
+            <div
+              className={
+                "generation-board__result-placeholder"
+                + (result?.status === "pending" ||
+                result?.status === "running" ||
+                result?.status === "queued"
+                  ? " generation-board__result-placeholder--loading"
+                  : "")
+              }
+            >
+              {resultLabel}
+            </div>
+          )}
+          <span className="generation-board__product-side-label">Kết quả</span>
+        </div>
+      </div>
       <div className="generation-board__product-actions">
         <button
           type="button"
@@ -761,102 +842,29 @@ function ProductTile({
           ✕
         </button>
       </div>
+      {result?.error && (
+        <div className="generation-board__result-error">{result.error}</div>
+      )}
+      {hasOutput && (
+        <button
+          type="button"
+          className="generation-board__view-prompt-btn"
+          onClick={onViewPrompt}
+          title="Xem prompt đã gửi cho Flow để tạo ảnh này"
+        >
+          Xem prompt đã dùng
+        </button>
+      )}
+      {result?.status === "failed" && (
+        <button
+          type="button"
+          className="project-modal__btn generation-board__retry-btn"
+          onClick={onRegenerate}
+        >
+          Thử lại
+        </button>
+      )}
     </li>
-  );
-}
-
-function ResultsGallery({
-  products,
-  results,
-  onRegenerate,
-  onPreviewProduct,
-  onPreviewOutput,
-}: {
-  products: GenerationProduct[];
-  results: Record<number, GenerationResult>;
-  onRegenerate: (productId: number) => void;
-  onPreviewProduct: (mediaId: string) => void;
-  onPreviewOutput: (result: GenerationResult) => void;
-}) {
-  if (products.length === 0) return null;
-  const anyResult = products.some((p) => results[p.id]);
-  if (!anyResult) {
-    return (
-      <section className="generation-board__gallery">
-        <h2 className="generation-board__subtitle">Kết quả</h2>
-        <p className="generation-board__gallery-hint">
-          Bấm <strong>Tạo ảnh</strong> để tạo ảnh cho từng sản phẩm.
-        </p>
-      </section>
-    );
-  }
-  return (
-    <section className="generation-board__gallery">
-      <h2 className="generation-board__subtitle">Kết quả</h2>
-      <ul className="generation-board__result-grid">
-        {products.map((p) => {
-          const r = results[p.id];
-          return (
-            <li key={p.id} className="generation-board__result-tile">
-              <div className="generation-board__result-pair">
-                <figure className="generation-board__result-side">
-                  <button
-                    type="button"
-                    className="generation-board__thumb-button generation-board__result-thumb"
-                    onClick={() => onPreviewProduct(p.media_id)}
-                    aria-label="Xem ảnh sản phẩm gốc lớn"
-                    title="Bấm để xem lớn"
-                  >
-                    <img src={mediaUrl(p.media_id)} alt="Sản phẩm gốc" />
-                  </button>
-                  <figcaption>Sản phẩm</figcaption>
-                </figure>
-                <figure className="generation-board__result-side">
-                  {r?.status === "done" && r.output_media_id ? (
-                    <button
-                      type="button"
-                      className="generation-board__thumb-button generation-board__result-thumb"
-                      onClick={() => onPreviewOutput(r)}
-                      aria-label="Xem ảnh kết quả lớn"
-                      title="Bấm để xem lớn"
-                    >
-                      <img src={mediaUrl(r.output_media_id)} alt="Kết quả tạo ảnh" />
-                    </button>
-                  ) : (
-                    <div className="generation-board__result-placeholder">
-                      {r?.status === "failed"
-                        ? "Lỗi"
-                        : r?.status === "running" || r?.status === "queued"
-                        ? "Đang tạo…"
-                        : r?.status === "pending"
-                        ? "Đang chờ"
-                        : "Chưa tạo"}
-                    </div>
-                  )}
-                  <figcaption>
-                    {r?.status === "done"
-                      ? `Xong${formatDuration(r.created_at, r.finished_at)}`
-                      : "Kết quả"}
-                  </figcaption>
-                </figure>
-              </div>
-              {r?.error && (
-                <div className="generation-board__result-error">{r.error}</div>
-              )}
-              {r?.status === "failed" && (
-                <button
-                  type="button"
-                  className="project-modal__btn"
-                  onClick={() => onRegenerate(p.id)}
-                >
-                  Thử lại
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 

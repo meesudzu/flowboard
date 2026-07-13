@@ -5809,18 +5809,23 @@ button:disabled {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
+  /* Each tile now hosts two side-by-side thumbnails
+   * (product | result), so the minimum tile width is 280px.
+   * Below that the pair would crowd; the user can still scroll
+   * horizontally on narrow viewports. */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
 }
 
 .generation-board__product-tile {
   position: relative;
   background: var(--card, #1c1c25);
   border: 1px solid var(--border, #34344a);
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .generation-board__product-thumb {
@@ -5852,6 +5857,111 @@ button:disabled {
 .generation-board__product-thumb-img--uploading {
   filter: blur(10px);
   opacity: 0.85;
+}
+
+/* ── Product + result pair (one tile, two thumbs) ──────────────
+ *
+ * Replaces the standalone "Kết quả" section that used to live
+ * below the products grid. The pair keeps the same look as the
+ * old .generation-board__result-pair so the visual hierarchy is
+ * unchanged for the user — just co-located with the source
+ * product so they can scan everything in one row.
+ */
+.generation-board__product-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.generation-board__result-side {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.generation-board__result-side img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border, #34344a);
+  background: #000;
+  display: block;
+}
+
+.generation-board__result-side--failed img,
+.generation-board__result-side--failed .generation-board__thumb-button {
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+.generation-board__result-placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--border, #34344a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #9b9bb5);
+  font-size: 12px;
+  text-align: center;
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+
+.generation-board__result-placeholder--loading {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: #c5b3ff;
+}
+
+.generation-board__product-side-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #9b9bb5);
+  text-align: center;
+}
+
+.generation-board__result-error {
+  font-size: 11px;
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+/* ── "Xem prompt đã dùng" button ────────────────────────────────
+ *
+ * Stretches across the tile width so it's an obvious affordance
+ * (vs. a small icon). Only renders when the result is a finished
+ * generation; earlier states have no prompt_used to show.
+ */
+.generation-board__view-prompt-btn {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #9b9bb5);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.generation-board__view-prompt-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c5b3ff;
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.generation-board__retry-btn {
+  align-self: stretch;
+  justify-content: center;
 }
 
 .generation-board__product-pill {
@@ -6391,6 +6501,111 @@ button.generation-board__thumb-button.generation-board__product-thumb img {
 .generation-board__product-thumb-img--uploading {
   filter: blur(10px);
   opacity: 0.85;
+}
+
+/* ── Product + result pair (one tile, two thumbs) ──────────────
+ *
+ * Replaces the standalone "Kết quả" section that used to live
+ * below the products grid. The pair keeps the same look as the
+ * old .generation-board__result-pair so the visual hierarchy is
+ * unchanged for the user — just co-located with the source
+ * product so they can scan everything in one row.
+ */
+.generation-board__product-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.generation-board__result-side {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.generation-board__result-side img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border, #34344a);
+  background: #000;
+  display: block;
+}
+
+.generation-board__result-side--failed img,
+.generation-board__result-side--failed .generation-board__thumb-button {
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+.generation-board__result-placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--border, #34344a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #9b9bb5);
+  font-size: 12px;
+  text-align: center;
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+
+.generation-board__result-placeholder--loading {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: #c5b3ff;
+}
+
+.generation-board__product-side-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #9b9bb5);
+  text-align: center;
+}
+
+.generation-board__result-error {
+  font-size: 11px;
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+/* ── "Xem prompt đã dùng" button ────────────────────────────────
+ *
+ * Stretches across the tile width so it's an obvious affordance
+ * (vs. a small icon). Only renders when the result is a finished
+ * generation; earlier states have no prompt_used to show.
+ */
+.generation-board__view-prompt-btn {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #9b9bb5);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border, #34344a);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.generation-board__view-prompt-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c5b3ff;
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.generation-board__retry-btn {
+  align-self: stretch;
+  justify-content: center;
 }
 
 button.generation-board__thumb-button.generation-board__result-thumb {
