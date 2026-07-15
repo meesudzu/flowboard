@@ -37,6 +37,27 @@ const IMAGE_MODEL_CHIPS: { key: ImageModelKey; label: string }[] = [
   { key: "NANO_BANANA_2", label: "Fast" },
 ];
 
+/** Trigger a single-file download for a finished result. Shared by
+ *  the batch "Tải toàn bộ" handler and the per-tile ⬇ button so
+ *  they share the same `<a download>` filename pattern and the
+ *  same-origin `/media/<id>` behaviour. Caller is responsible for
+ *  pre-sanitising ``safeBoard`` (board name with non-alphanum chars
+ *  collapsed to ``_``). No-ops if the result has no
+ *  ``output_media_id`` -- defence in depth, callers should already
+ *  have gated on ``hasOutput``. */
+function downloadOneResult(
+  r: GenerationResult,
+  safeBoard: string,
+): void {
+  if (!r.output_media_id) return;
+  const a = document.createElement("a");
+  a.href = mediaUrl(r.output_media_id);
+  a.download = `${safeBoard}-${r.product_id}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 // Two-tier poll cadence while any result is in flight.
 //
 // We poll aggressively (1.5 s) for the first 30 seconds because that's
@@ -106,6 +127,14 @@ export function GenerationBoard() {
    *  small object so the modal can show the product id and a
    *  useful title alongside the prompt text. */
   const [viewingPrompt, setViewingPrompt] = useState<{ productId: number; prompt: string } | null>(null);
+  /** Drives the "Đang tải (i/N)…" label on the "Tải toàn bộ"
+   *  button while a batch download is in flight. ``null`` means
+   *  no download is running so the label falls back to the
+   *  idle "⬇ Tải toàn bộ (N)". Updated between each ``<a>.click()``
+   *  so the user sees progress on bigger boards. */
+  const [downloadProgress, setDownloadProgress] = useState<
+    { downloaded: number; total: number } | null
+  >(null);
 
   // Track when the latest in-flight batch started so we can compute
   // the poll cadence per tick (FAST for the first 30s, SLOW after).
@@ -229,6 +258,69 @@ export function GenerationBoard() {
       return !r || r.status !== "done";
     }).length;
   }, [products, results]);
+
+  // Count of "done" results for the current board. Drives the
+  // "Tải toàn bộ" button label (``⬇ Tải toàn bộ (N)``) and the
+  // disabled state when no images are ready. Same hook-order
+  // contract as ``pendingCount`` above: must live before the
+  // loading/early-return so React doesn't trip #310.
+  const doneCount = useMemo(
+    () =>
+      Object.values(results).filter(
+        (r) => r.status === "done" && Boolean(r.output_media_id),
+      ).length,
+    [results],
+  );
+
+  // Sequential batch downloader for every finished result on the
+  // current board. Mirrors ``NodeCard.handleDownload`` -- same
+  // synthetic-anchor click + small inter-step delay so the browser
+  // doesn't swallow clicks or pop the "allow multiple downloads"
+  // chrome on a single tick. We sort by ``productId`` so the
+  // files land in the user's folder in the same order as the
+  // product tiles on screen, which matches what the user just
+  // scanned. Filename pattern is ``<safeBoardName>-<productId>.png``
+  // (``safeBoardName`` = board name with non-alphanum/dash/underscore
+  // chars collapsed to ``_``, falling back to ``flowboard``).
+  //
+  // Disabled when a previous batch is still running OR when there
+  // are no done results to download. The button is NOT disabled
+  // by ``inFlightCount`` -- the user might want to grab everything
+  // they've got so far while the next batch is still cooking.
+  const handleDownloadAll = useCallback(() => {
+    if (downloadProgress !== null) return;
+    const queue = Object.values(results)
+      .filter((r) => r.status === "done" && Boolean(r.output_media_id))
+      .sort((a, b) => a.product_id - b.product_id);
+    if (queue.length === 0) return;
+    const safeBoard = (boardName || "flowboard").replace(
+      /[^A-Za-z0-9_-]+/g,
+      "_",
+    );
+    setDownloadProgress({ downloaded: 0, total: queue.length });
+    queue.forEach((r, i) => {
+      // Stagger each click so browsers that coalesce rapid
+      // programmatic downloads only honour one per tick. 100ms is
+      // the same delay NodeCard uses; keeps the existing UX
+      // behaviour consistent across the app.
+      window.setTimeout(() => {
+        downloadOneResult(r, safeBoard);
+        const done = i + 1;
+        if (done >= queue.length) {
+          // Brief delay so the user actually sees "Đang tải (N/N)…"
+          // flash before we snap back to the idle label -- the
+          // last click is synchronous, so without this the label
+          // would change in the same paint as the click and look
+          // like nothing happened.
+          window.setTimeout(() => {
+            setDownloadProgress(null);
+          }, 250);
+        } else {
+          setDownloadProgress({ downloaded: done, total: queue.length });
+        }
+      }, i * 100);
+    });
+  }, [downloadProgress, results, boardName]);
 
   if (boardId === null || loading || config === null) {
     return (
@@ -580,6 +672,16 @@ export function GenerationBoard() {
                       setViewingPrompt({ productId: p.id, prompt: r.prompt_used });
                     }
                   }}
+                  onDownload={() => {
+                    const r = results[p.id];
+                    if (r?.status === "done" && r.output_media_id) {
+                      const safeBoard = (boardName || "flowboard").replace(
+                        /[^A-Za-z0-9_-]+/g,
+                        "_",
+                      );
+                      downloadOneResult(r, safeBoard);
+                    }
+                  }}
                 />
               );
             })}
@@ -658,6 +760,27 @@ export function GenerationBoard() {
             ? `Tạo ${pendingCount} ảnh mới`
             : "Tạo ảnh"}
         </button>
+        {/* Secondary action: download every finished result on
+            this board in one click. Inherits the neutral
+            ``project-modal__btn`` (no --primary modifier) so it
+            visually defers to "Tạo ảnh" -- generate is still the
+            primary CTA. Disabled when there's nothing to grab or
+            a previous batch is still in flight. */}
+        <button
+          type="button"
+          className="project-modal__btn generation-board__download-all-btn"
+          onClick={handleDownloadAll}
+          disabled={doneCount === 0 || downloadProgress !== null}
+          title={
+            doneCount === 0
+              ? "Chưa có ảnh nào hoàn thành"
+              : `Tải về tất cả ${doneCount} ảnh đã hoàn thành (PNG)`
+          }
+        >
+          {downloadProgress !== null
+            ? `Đang tải (${downloadProgress.downloaded}/${downloadProgress.total})…`
+            : `⬇ Tải toàn bộ (${doneCount})`}
+        </button>
       </div>
     </div>
   );
@@ -673,6 +796,7 @@ function ProductTile({
   onPreviewResult,
   onEditPrompt,
   onViewPrompt,
+  onDownload,
 }: {
   product: GenerationProduct;
   result: GenerationResult | undefined;
@@ -694,6 +818,11 @@ function ProductTile({
   /** Open the read-only prompt viewer (shows the exact prompt
    *  string the worker sent to Flow for this product). */
   onViewPrompt: () => void;
+  /** Download just this tile's generated result. Only meaningful
+   *  when ``result.status === "done"``; the icon button is hidden
+   *  otherwise so the parent can safely pass an unconditional
+   *  closure here. */
+  onDownload: () => void;
 }) {
   const hasOverride = product.prompt_override.length > 0;
   // True only when the latest result is a finished generation.
@@ -832,6 +961,28 @@ function ProductTile({
         >
           ✎
         </button>
+        {hasOutput && (
+          <button
+            type="button"
+            className="generation-board__icon-btn"
+            onClick={onViewPrompt}
+            aria-label="Xem prompt đã gửi cho Flow"
+            title="Xem prompt đã dùng"
+          >
+            📝
+          </button>
+        )}
+        {hasOutput && (
+          <button
+            type="button"
+            className="generation-board__icon-btn"
+            onClick={onDownload}
+            aria-label="Tải ảnh này về máy"
+            title="Tải ảnh này (PNG)"
+          >
+            ⬇
+          </button>
+        )}
         <button
           type="button"
           className="generation-board__icon-btn generation-board__icon-btn--danger"
@@ -844,16 +995,6 @@ function ProductTile({
       </div>
       {result?.error && (
         <div className="generation-board__result-error">{result.error}</div>
-      )}
-      {hasOutput && (
-        <button
-          type="button"
-          className="generation-board__view-prompt-btn"
-          onClick={onViewPrompt}
-          title="Xem prompt đã gửi cho Flow để tạo ảnh này"
-        >
-          Xem prompt đã dùng
-        </button>
       )}
       {result?.status === "failed" && (
         <button

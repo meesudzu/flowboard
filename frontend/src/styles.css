@@ -5871,6 +5871,19 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  /* Cap the pair width so a row with fewer tiles (e.g. 2 wide
+   * tiles in the last row of a 5-column grid) doesn't produce
+   * dramatically larger thumbnails than a row with 5 tiles.
+   * Without this cap, ``aspect-ratio: 1 / 1`` on each thumb
+   * means a tile that's twice as wide also becomes twice as
+   * tall, leaving the bottom row visibly taller than the rest.
+   * The cap matches the minmax(280px) floor on the grid so a
+   * single-tile row still looks the same as a 5-tile row.
+   * ``margin-inline: auto`` centres the pair when the tile is
+   * wider than the cap so the empty space falls evenly on
+   * both sides of the thumbs instead of stretching them. */
+  max-width: 280px;
+  margin-inline: auto;
 }
 
 .generation-board__result-side {
@@ -5932,31 +5945,6 @@ button:disabled {
   border-radius: 6px;
   padding: 4px 8px;
   word-break: break-word;
-}
-
-/* ── "Xem prompt đã dùng" button ────────────────────────────────
- *
- * Stretches across the tile width so it's an obvious affordance
- * (vs. a small icon). Only renders when the result is a finished
- * generation; earlier states have no prompt_used to show.
- */
-.generation-board__view-prompt-btn {
-  width: 100%;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted, #9b9bb5);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border, #34344a);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-
-.generation-board__view-prompt-btn:hover {
-  background: rgba(139, 92, 246, 0.1);
-  color: #c5b3ff;
-  border-color: rgba(139, 92, 246, 0.45);
 }
 
 .generation-board__retry-btn {
@@ -6051,6 +6039,22 @@ button:disabled {
 .generation-board__product-add {
   width: 100%;
   aspect-ratio: 1 / 1;
+  /* Cap the add button so it can't drag the row height taller
+   * than the product tiles. Without these caps, an add button
+   * in a wide column (e.g. the last item of a 3-tile row in a
+   * 4-column grid) becomes a ~387 px square that forces every
+   * tile in the row to stretch to match via CSS grid's default
+   * ``align-self: stretch``. ``max-width`` matches the cap on
+   * ``.generation-board__product-pair`` so the "+" tile reads
+   * the same width as a normal tile; ``max-height`` matches the
+   * tile content height (~240 px: 10 px padding + ~154 px pair
+   * + 8 px gap + ~44 px action row + 10 px padding) so the row
+   * height stops being dominated by the add button. ``margin:
+   * auto`` centres the button in its grid cell so the leftover
+   * horizontal space falls evenly on either side. */
+  max-width: 280px;
+  max-height: 240px;
+  margin: 0 auto;
   background: transparent;
   border: 1.5px dashed var(--border, #34344a);
   border-radius: 10px;
@@ -6063,92 +6067,6 @@ button:disabled {
 .generation-board__product-add:hover {
   border-color: var(--accent, #8b5cf6);
   color: var(--accent, #8b5cf6);
-}
-
-/* Results gallery. */
-.generation-board__gallery {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.generation-board__gallery-hint {
-  margin: 0;
-  color: var(--muted, #9b9bb5);
-  font-size: 12.5px;
-}
-
-.generation-board__result-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px;
-}
-
-.generation-board__result-tile {
-  background: var(--card, #1c1c25);
-  border: 1px solid var(--border, #34344a);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.generation-board__result-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0;
-}
-
-.generation-board__result-side {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.generation-board__result-side img {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--border, #34344a);
-  background: #000;
-  display: block;
-}
-
-.generation-board__result-side figcaption {
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted, #9b9bb5);
-  text-align: center;
-}
-
-.generation-board__result-placeholder {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed var(--border, #34344a);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted, #9b9bb5);
-  font-size: 12px;
-}
-
-.generation-board__result-error {
-  font-size: 11px;
-  color: #fda4af;
-  background: rgba(244, 63, 94, 0.1);
-  border-radius: 6px;
-  padding: 4px 8px;
-  word-break: break-word;
 }
 
 /* Viewport-anchored action bar.
@@ -6165,24 +6083,32 @@ button:disabled {
  * mode; for generate mode we override that to `overflow: visible` so
  * this `position: fixed` bar isn't clipped. See the
  * `.canvas-wrap:has(.generation-board)` rule above.
+ *
+ * Now hosts TWO buttons (generate + "Tải toàn bộ"). The bar itself
+ * is still a docked footer (glass + border + shadow) so the
+ * container reads as one unit; inside it's a right-aligned flex
+ * row so the secondary button hugs the generate CTA on its left.
  */
 .generation-board__action-bar {
   position: fixed;
-  /* The bar lives in the canvas-wrap column (right of the sidebar),
-   * so its `left` must skip past the sidebar — see `--sidebar-width`
-   * on .app. The 16px right gutter mirrors the .generation-board
-   * padding so the bar's right edge aligns with the content area.
-   * Using `right: 16px` here means the bar automatically resizes
-   * with the viewport instead of overflowing. */
-  left: calc(var(--sidebar-width, 220px) + 16px);
+  /* Anchored at the bottom-right corner of the viewport. We no
+   * longer span the full content width — the bar sizes to its
+   * two equal-width buttons plus the 12px gap, so `right: 16px`
+   * alone is enough. No `left:` needed; the bar is content-sized.
+   * The 16px gutter mirrors the .generation-board padding so the
+   * bar's right edge aligns with the content area. */
   right: 16px;
   bottom: 12px;
   z-index: 10;
-  /* The bar is now just a single primary button. No flex row, no
-   * progress text -- the user gets the action and a tooltip on
-   * hover. The container is still visible (background, border,
-   * shadow) so the button reads as a docked footer rather than a
-   * floating control. */
+  /* Flex row, right-aligned: both buttons are intrinsic-width
+   * (see .generation-board__generate-btn and
+   * .generation-board__download-all-btn), so the bar stays a
+   * compact pill anchored at the bottom-right. 12px gap is
+   * enough to separate the two CTAs visually without crowding. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
   padding: 10px;
   background: rgba(20, 20, 28, 0.92);
   border: 1px solid var(--border, #34344a);
@@ -6197,16 +6123,36 @@ button:disabled {
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
 }
 
-/* The primary CTA stretches to fill the bar so the user has a
- * large tap target without losing the "fixed footer" framing.
- * Min-width keeps it from collapsing to a tiny pill on
- * narrow viewports. */
+/* The primary CTA. Now intrinsic-width (no flex grow) so the
+ * bar stays a small pill anchored at the bottom-right corner;
+ * ``flex: 0 0 auto`` keeps the button at its natural content
+ * size. ``padding: 10px 16px`` matches the secondary
+ * ``.generation-board__download-all-btn`` exactly so the two
+ * CTAs read as the same control type, with the only visual
+ * distinction being the primary purple fill vs the neutral grey
+ * and a ``font-weight: 600`` vs ``500`` hierarchy signal.
+ * ``white-space: nowrap`` keeps a longer label like
+ * ``Tạo 5 ảnh mới`` from wrapping inside the now-narrower button. */
 .generation-board__generate-btn {
-  width: 100%;
-  min-width: 180px;
-  padding: 10px 18px;
+  flex: 0 0 auto;
+  padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Secondary action: "Tải toàn bộ". Inherits the neutral
+ * ``project-modal__btn`` look (no --primary modifier) so the
+ * primary generate CTA stays the dominant control. Sits to the
+ * right of the generate button inside the same action bar; auto
+ * width so it shrinks to fit the "Đang tải (i/N)…" label without
+ * stretching to match the primary CTA. */
+.generation-board__download-all-btn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* ── Inline spinner + thumb overlay (used during uploads) ─────────────── */
@@ -6515,6 +6461,19 @@ button.generation-board__thumb-button.generation-board__product-thumb img {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  /* Cap the pair width so a row with fewer tiles (e.g. 2 wide
+   * tiles in the last row of a 5-column grid) doesn't produce
+   * dramatically larger thumbnails than a row with 5 tiles.
+   * Without this cap, ``aspect-ratio: 1 / 1`` on each thumb
+   * means a tile that's twice as wide also becomes twice as
+   * tall, leaving the bottom row visibly taller than the rest.
+   * The cap matches the minmax(280px) floor on the grid so a
+   * single-tile row still looks the same as a 5-tile row.
+   * ``margin-inline: auto`` centres the pair when the tile is
+   * wider than the cap so the empty space falls evenly on
+   * both sides of the thumbs instead of stretching them. */
+  max-width: 280px;
+  margin-inline: auto;
 }
 
 .generation-board__result-side {
@@ -6576,31 +6535,6 @@ button.generation-board__thumb-button.generation-board__product-thumb img {
   border-radius: 6px;
   padding: 4px 8px;
   word-break: break-word;
-}
-
-/* ── "Xem prompt đã dùng" button ────────────────────────────────
- *
- * Stretches across the tile width so it's an obvious affordance
- * (vs. a small icon). Only renders when the result is a finished
- * generation; earlier states have no prompt_used to show.
- */
-.generation-board__view-prompt-btn {
-  width: 100%;
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted, #9b9bb5);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border, #34344a);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-
-.generation-board__view-prompt-btn:hover {
-  background: rgba(139, 92, 246, 0.1);
-  color: #c5b3ff;
-  border-color: rgba(139, 92, 246, 0.45);
 }
 
 .generation-board__retry-btn {
