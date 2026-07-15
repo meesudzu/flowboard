@@ -47,17 +47,32 @@ button:disabled {
 
 .app {
   display: grid;
-  /* Project sidebar (auto-sized; toggles 220 ↔ 44) | canvas
-     Chat sidebar disabled — restore by adding `320px` back here and
-     un-commenting the ChatSidebar import in App.tsx. */
-  grid-template-columns: auto 1fr;
+  /* Only canvas-wrap is in-flow (project sidebar is
+   * `position: fixed`, and every other sibling — Toaster,
+   * GenerationDialog, ResultViewer, ForcedSetupGate — is
+   * already fixed). One column is enough; canvas-wrap takes
+   * the full padded content area.
+   *
+   * Chat sidebar disabled — restore by adding `320px` here and
+   * un-commenting the ChatSidebar import in App.tsx. */
+  grid-template-columns: 1fr;
+  /* Use 100% instead of 100vw so the layout never exceeds the
+   * visible viewport. `100vw` includes the scrollbar width on
+   * browsers/platforms with always-visible scrollbars (Windows,
+   * Linux), which can trigger horizontal scroll even when the
+   * actual content fits. `100%` is relative to #root, which
+   * fills the html/body chain — always the visible viewport.
+   * Height still uses 100vh since vertical scrollbars don't
+   * inflate the layout horizontally. */
   height: 100vh;
-  width: 100vw;
-  /* Exposed for the generation-mode action bar (position: fixed),
-   * which lives in the canvas-wrap column. The bar's `left` is
-   * this offset so it stays inside the canvas-wrap regardless of
-   * the viewport width. Sidebar toggles its width to 44px when
-   * collapsed; we mirror that here. */
+  width: 100%;
+  /* Sidebar is `position: fixed` so it no longer occupies a
+   * grid track. Pad the app's left side by the sidebar's width
+   * so canvas-wrap starts at the right edge of the sidebar
+   * instead of being covered by it. The :has() rule below
+   * mirrors the collapsed state (220 ↔ 44), so collapse/expand
+   * stay in sync without any JS measurement. */
+  padding-left: var(--sidebar-width);
   --sidebar-width: 220px;
 }
 
@@ -69,11 +84,30 @@ button:disabled {
 .project-sidebar {
   display: flex;
   flex-direction: column;
+  /* Pin to viewport so the sidebar never scrolls with the canvas
+   * (which scrolls internally in both canvas-mode pan/zoom and
+   * generation-mode vertical scroll). The app pads its own left
+   * side by --sidebar-width to keep canvas-wrap clear. */
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 220px;
+  /* Bound height to the visible viewport. `100dvh` reflects the
+   * real viewport after browser chrome (URL bar, devtools), so
+   * the sidebar doesn't overflow when those expand/collapse.
+   * Browsers without dvh support fall back to `100vh`. */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   background: var(--panel);
   border-right: 1px solid var(--border);
   transition: width 120ms ease;
   overflow: hidden;
+  /* Above the canvas (default stacking), below modal backdrops
+   * (z-index 240) and below the kebab menu's local stacking
+   * context (z-index 60 within this fixed parent). */
+  z-index: 40;
 }
 .project-sidebar--collapsed {
   width: 44px;
