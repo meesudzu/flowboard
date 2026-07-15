@@ -110,11 +110,12 @@ def test_get_generation_mode_on_empty_board(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["board_id"] == b["id"]
-    # New generate-mode projects are seeded with the Vietnamese
-    # template prompt so the textarea starts populated; users can still
-    # clear it via PATCH /config.
-    from flowboard.db.models import DEFAULT_GENERATION_PROMPT
-    assert body["config"]["prompt"] == DEFAULT_GENERATION_PROMPT
+    # New generate-mode projects start with an EMPTY shared prompt so
+    # the user is steered toward choosing a template from the
+    # right-side "Prompt mẫu" panel instead of editing a pre-filled
+    # Vietnamese lookbook template (which had a tendency to ship
+    # half-edited).
+    assert body["config"]["prompt"] == ""
     assert body["config"]["aspect_ratio"] == "IMAGE_ASPECT_RATIO_PORTRAIT"
     assert body["products"] == []
     assert body["results"] == []

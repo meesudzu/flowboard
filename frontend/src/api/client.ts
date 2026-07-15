@@ -890,6 +890,93 @@ export async function deleteReference(id: number): Promise<void> {
   }
 }
 
+// ── Prompt templates ───────────────────────────────────────────────────────
+// User-curated global list of (title, body) prompt templates that the
+// right-side Templates panel browses and the GenerationDialog prompt
+// textarea injects with a click. Backend mirror:
+// agent/flowboard/routes/prompt_templates.py + db.models.PromptTemplate.
+
+export interface PromptTemplate {
+  id: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Wire-shape bodies are snake_case to match the FastAPI schema 1:1.
+export interface PromptTemplateCreateInput {
+  title: string;
+  body: string;
+}
+
+export interface PromptTemplatePatchInput {
+  title?: string;
+  body?: string;
+}
+
+interface PromptTemplateRowWire {
+  id: number;
+  title: string;
+  body: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+function mapPromptTemplateRow(row: PromptTemplateRowWire): PromptTemplate {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at ?? "",
+    updatedAt: row.updated_at ?? "",
+  };
+}
+
+export async function listPromptTemplates(params?: {
+  q?: string;
+  limit?: number;
+}): Promise<PromptTemplate[]> {
+  const search = new URLSearchParams();
+  if (params?.q) search.set("q", params.q);
+  if (params?.limit !== undefined) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  const rows = await api<PromptTemplateRowWire[]>(
+    `/api/prompt-templates${qs ? `?${qs}` : ""}`,
+  );
+  return rows.map(mapPromptTemplateRow);
+}
+
+export async function createPromptTemplate(
+  input: PromptTemplateCreateInput,
+): Promise<PromptTemplate> {
+  const row = await api<PromptTemplateRowWire>("/api/prompt-templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return mapPromptTemplateRow(row);
+}
+
+export async function patchPromptTemplate(
+  id: number,
+  patch: PromptTemplatePatchInput,
+): Promise<PromptTemplate> {
+  const row = await api<PromptTemplateRowWire>(
+    `/api/prompt-templates/${id}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+  return mapPromptTemplateRow(row);
+}
+
+export async function deletePromptTemplate(id: number): Promise<void> {
+  // Backend returns 204 No Content; api<T>() would choke on the empty
+  // body, so we use fetch() directly and skip the JSON parse.
+  const res = await fetch(`/api/prompt-templates/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`deletePromptTemplate: ${res.status} ${res.statusText}`);
+  }
+}
+
 // ── Flow project sync (local → Flow, one direction) ───────────────────────
 
 export interface BoardFlowStatus {

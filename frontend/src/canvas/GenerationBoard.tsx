@@ -16,6 +16,8 @@ import { mediaUrl } from "../api/client";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { ProductPromptModal } from "../components/ProductPromptModal";
 import { PromptViewerModal } from "../components/PromptViewerModal";
+import { PromptTemplateButton } from "../components/PromptTemplateButton";
+import { usePromptTemplateInject } from "../hooks/usePromptTemplateInject";
 
 const PRODUCT_STATUS_LABEL: Record<string, string> = {
   pending: "Đang chờ",
@@ -103,6 +105,23 @@ export function GenerationBoard() {
   const updateProduct = useGenerationModeStore((s) => s.updateProduct);
 
   const settingsImageModel = useSettingsStore((s) => s.imageModel);
+
+  // Shared inject logic — same contract as the canvas-mode
+  // GenerationDialog picker. Persist via the existing updatePrompt
+  // pipeline so debounced PATCH /config keeps working.
+  const injectTemplate = usePromptTemplateInject({
+    // config is hydrated by the parent load() before the user can
+    // click the picker; the optional chain + fallback keeps strict
+    // null-safety happy without runtime overhead.
+    getCurrent: () => config?.prompt ?? "",
+    onInject: (next) => {
+      updatePrompt(next).catch((e) => {
+        useGenerationModeStore.setState({
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+    },
+  });
   const setSettingsImageModel = useSettingsStore((s) => s.setImageModel);
 
   const [modelHover, setModelHover] = useState(false);
@@ -496,33 +515,40 @@ export function GenerationBoard() {
         {/* ── Prompt column (right) ─────────────────────────────────── */}
         <div className="generation-board__input-col generation-board__input-col--prompt">
           <div className="generation-board__prompt-row">
-            <label className="generation-board__prompt-label" htmlFor="generation-prompt">
-              Prompt
-            </label>
-            <button
-              type="button"
-              className="project-modal__btn generation-board__autoprompt-btn"
-              onClick={async () => {
-                try {
-                  const fresh = await autoPrompt();
-                  await updatePrompt(fresh);
-                } catch (e) {
-                  useGenerationModeStore.setState({
-                    error: e instanceof Error ? e.message : String(e),
-                  });
-                }
-              }}
-              disabled={autoPrompting}
-              title="Dùng MiniMax viết lại prompt theo mẫu mặc định"
-            >
-              {autoPrompting ? "Đang tạo prompt…" : "Tự tạo prompt"}
-            </button>
+            <div className="generation-board__prompt-header">
+              <label className="generation-board__prompt-label" htmlFor="generation-prompt">
+                Prompt
+              </label>
+              <div className="generation-board__prompt-header-actions">
+                <PromptTemplateButton
+                  onSelect={injectTemplate}
+                />
+                <button
+                  type="button"
+                  className="project-modal__btn generation-board__autoprompt-btn"
+                  onClick={async () => {
+                    try {
+                      const fresh = await autoPrompt();
+                      await updatePrompt(fresh);
+                    } catch (e) {
+                      useGenerationModeStore.setState({
+                        error: e instanceof Error ? e.message : String(e),
+                      });
+                    }
+                  }}
+                  disabled={autoPrompting}
+                  title="Dùng MiniMax viết lại prompt theo mẫu mặc định"
+                >
+                  {autoPrompting ? "Đang tạo prompt…" : "Tự tạo prompt"}
+                </button>
+              </div>
+            </div>
             <textarea
               id="generation-prompt"
               className="generation-board__prompt-input"
               rows={6}
               value={config.prompt}
-              placeholder="Mô tả bối cảnh, ánh sáng, tư thế, tâm trạng… áp dụng cho tất cả ảnh sản phẩm."
+              placeholder="Chọn một prompt mẫu từ nút 📚 Mẫu ở trên, hoặc tự gõ nội dung tại đây."
               onChange={(e) => onPromptChange(e.target.value)}
             />
             <div className="generation-board__chips">

@@ -133,6 +133,32 @@ class Reference(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+
+class PromptTemplate(SQLModel, table=True):
+    """User-curated reusable prompt templates.
+
+    A simple (title, body) pair the user can browse in the right-side
+    Templates panel and inject into the GenerationDialog prompt
+    textarea with a click. Distinct from Reference (saved media) and
+    GenerationConfig.prompt (per-board generation-mode shared prompt):
+
+    - Reference rows carry a media_id pointing at cached bytes; this
+      table carries text only.
+    - GenerationConfig.prompt is bound to a single board; this table
+      is global across boards (no board_id foreign key).
+    - Title is the human-readable handle used in the panel list and
+      dropdown. Body is the text inserted into the textarea on click.
+    - CRUD lives at /api/prompt-templates (see routes/prompt_templates.py).
+    - Sorted by ``updated_at DESC`` so recently-touched templates
+      surface first; the inline ``id`` is purely for stable keying.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str  # short label shown in the panel list / dropdown
+    body: str   # prompt text inserted into the textarea on click
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class ChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     board_id: int = Field(foreign_key="board.id", index=True)
@@ -168,17 +194,6 @@ class PipelineRun(SQLModel, table=True):
     error: Optional[str] = None
 
 
-#: The default prompt template shown on every new generation-mode project.
-#: Module-level so tests can import + assert against it without parsing
-#: the SQLModel field default. Hoisted above the GenerationConfig class
-#: so the ``prompt: str = DEFAULT_GENERATION_PROMPT`` field default can
-#: reference it at class-definition time.
-DEFAULT_GENERATION_PROMPT = (
-    "Giữ chính xác thiết kế, màu sắc, chất liệu, logo, bao bì và các chi tiết nhận diện của sản phẩm từ ảnh gốc.\n"
-    "Bố cục: Người mẫu Đứng thẳng, hai tay khoanh nhẹ trước ngực tạo dáng tự nhiên, thể hiện sự tự tin và phong thái chuyên nghiệp. Ánh mắt nhìn thẳng vào ống kính với biểu cảm tự chủ và cuốn hút.\n"
-    "[Ảnh tham chiếu]: Ảnh đầu là sản phẩm. Ảnh sau là chân dung người mẫu được sử dụng làm hình ảnh tham khảo chính xác về bố cục, phong cách và cảm xúc.\n"
-    "[Lưu ý] có độ phân giải 4K, chi tiết cao, chân thực như ảnh chụp, giữ nguyên cấu trúc và chất liệu sản phẩm."
-)
 
 
 class GenerationConfig(SQLModel, table=True):
@@ -196,10 +211,17 @@ class GenerationConfig(SQLModel, table=True):
     model_media_id: Optional[str] = None
     # Free-form user prompt describing background / pose / mood. Sent
     # to Flow as part of the structuredPrompt for every per-product
-    # generation. New projects are seeded with DEFAULT_GENERATION_PROMPT
-    # (a Vietnamese lookbook template) so the textarea isn't empty --
-    # the user can overwrite via PATCH /config at any time.
-    prompt: str = DEFAULT_GENERATION_PROMPT
+    # generation.
+    #
+    # New projects start with ``prompt = ""`` — the textarea in
+    # ``GenerationBoard`` is intentionally empty by default so the
+    # user is steered toward picking a template from the right-side
+    # "📚 Prompt mẫu" panel (or composing their own). Previously this
+    # field was seeded with a long Vietnamese lookbook template, which
+    # had two problems: it leaked a "default" the user had to delete
+    # before adding their own, and it was easy to ship a half-edited
+    # variant by mistake. The empty default forces a deliberate pick.
+    prompt: str = ""
     aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT"
     image_model: str = "NANO_BANANA_PRO"
     updated_at: datetime = Field(default_factory=_utcnow)

@@ -4,27 +4,32 @@ import { useBoardStore } from "../store/board";
 import { filterReferences, useReferencesStore } from "../store/references";
 
 /**
- * Right-side collapsible reference library.
+ * References tab content (right-side panel body).
  *
- * The panel renders a vertical list of saved references — each card is
- * a 64x64 thumbnail + label + shortId tag with hover-revealed actions
- * (pin toggle, rename in-place, delete with confirm). Cards are both
- * clickable (Phase 3 will wire spawn-at-canvas-center) and draggable
+ * Renders the saved-media library — each card is a 64x64 thumbnail +
+ * label + shortId tag with hover-revealed actions (pin toggle, rename
+ * in-place, delete with confirm). Cards are both clickable (spawns a
+ * new visual_asset node at a fixed fallback position) and draggable
  * with a custom `application/x-flowboard-reference` MIME so canvas
  * drop handlers can detect the payload without colliding with the
  * existing file-upload drop path.
  *
- * A fixed-position vertical ★ tab on the right edge toggles the open
- * state, which is persisted to localStorage by the store.
+ * NOTE: this is the *content* of the References tab; the panel chrome
+ * (aside wrapper, header, search-input positioning, open/close toggle
+ * tab on the right edge) lives in ``RightPanel`` and is shared with
+ * the Templates tab. Kept as a separate component so adding another
+ * tab later is just one more body swap in ``RightPanel``.
+ *
+ * v1 retained the old ``useReferencesStore.panelOpen`` field for
+ * backward compatibility with any third-party callers (none today,
+ * but cheap to keep). The RightPanel owns the open/closed state now.
  */
-export function ReferencesPanel() {
+export function ReferencesPanelContent() {
   const items = useReferencesStore((s) => s.items);
   const loading = useReferencesStore((s) => s.loading);
   const error = useReferencesStore((s) => s.error);
-  const panelOpen = useReferencesStore((s) => s.panelOpen);
   const query = useReferencesStore((s) => s.query);
   const setQuery = useReferencesStore((s) => s.setQuery);
-  const togglePanel = useReferencesStore((s) => s.togglePanel);
   const remove = useReferencesStore((s) => s.remove);
   const rename = useReferencesStore((s) => s.rename);
   const togglePin = useReferencesStore((s) => s.togglePin);
@@ -33,76 +38,45 @@ export function ReferencesPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        className="references-panel__toggle-tab"
-        onClick={togglePanel}
-        aria-label={panelOpen ? "Thu gọn tham chiếu" : "Mở tham chiếu"}
-        title={panelOpen ? "Thu gọn thư viện" : "Mở thư viện"}
-      >
-        <span aria-hidden="true">{panelOpen ? "›" : "★"}</span>
-      </button>
-      <aside
-        className={`references-panel${
-          panelOpen ? " references-panel--open" : " references-panel--collapsed"
-        }`}
-        aria-hidden={!panelOpen}
-      >
-        <div className="references-panel__header">
-          <span className="references-panel__title">
-            <span aria-hidden="true">★</span> Thư viện
-          </span>
-          <button
-            type="button"
-            className="references-panel__close"
-            onClick={togglePanel}
-            aria-label="Thu gọn bảng tham chiếu"
-            title="Thu gọn"
-          >
-            ›
-          </button>
-        </div>
+      <div className="references-panel__search">
+        <input
+          type="text"
+          placeholder="🔍 tìm kiếm tham chiếu…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Tìm kiếm tham chiếu"
+        />
+      </div>
 
-        <div className="references-panel__search">
-          <input
-            type="text"
-            placeholder="🔍 tìm kiếm tham chiếu…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Tìm kiếm tham chiếu"
+      {error && <div className="references-panel__error">{error}</div>}
+
+      {loading && items.length === 0 && (
+        <div className="references-panel__empty">Đang tải…</div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div className="references-panel__empty">
+          Lưu một biến thể từ bất kỳ ô ảnh nào để bắt đầu thư viện.
+        </div>
+      )}
+
+      {!loading && items.length > 0 && filtered.length === 0 && (
+        <div className="references-panel__empty">
+          No references match "{query}".
+        </div>
+      )}
+
+      <ul className="references-panel__list">
+        {filtered.map((ref) => (
+          <ReferenceCard
+            key={ref.id}
+            item={ref}
+            onRename={(label) => rename(ref.id, label)}
+            onTogglePin={() => togglePin(ref.id)}
+            onDelete={() => remove(ref.id)}
           />
-        </div>
-
-        {error && <div className="references-panel__error">{error}</div>}
-
-        {loading && items.length === 0 && (
-          <div className="references-panel__empty">Đang tải…</div>
-        )}
-
-        {!loading && items.length === 0 && (
-          <div className="references-panel__empty">
-            Lưu một biến thể từ bất kỳ ô ảnh nào để bắt đầu thư viện.
-          </div>
-        )}
-
-        {!loading && items.length > 0 && filtered.length === 0 && (
-          <div className="references-panel__empty">
-            No references match "{query}".
-          </div>
-        )}
-
-        <ul className="references-panel__list">
-          {filtered.map((ref) => (
-            <ReferenceCard
-              key={ref.id}
-              item={ref}
-              onRename={(label) => rename(ref.id, label)}
-              onTogglePin={() => togglePin(ref.id)}
-              onDelete={() => remove(ref.id)}
-            />
-          ))}
-        </ul>
-      </aside>
+        ))}
+      </ul>
     </>
   );
 }
@@ -342,3 +316,4 @@ function ReferenceCard({
     </li>
   );
 }
+

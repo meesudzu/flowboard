@@ -15,6 +15,8 @@ import {
   type OmniFlashDuration,
   type VideoQuality,
 } from "../store/settings";
+import { PromptTemplateButton } from "./PromptTemplateButton";
+import { usePromptTemplateInject } from "../hooks/usePromptTemplateInject";
 import {
   autoPrompt as autoPromptApi,
   autoPromptBatch as autoPromptBatchApi,
@@ -242,6 +244,19 @@ export function GenerationDialog() {
   // time). Click another chip → swap; click the same chip → close;
   // click outside (handled inline) → close.
   const [openVariantPicker, setOpenVariantPicker] = useState<string | null>(null);
+
+  // Shared inject logic (overwrite-confirm + truncate) — see
+  // usePromptTemplateInject for the contract. We also clear the
+  // "auto" badge so the next dispatch is treated as a manual pick.
+  // The getter reads `prompt` at call time so we don't capture a
+  // stale value across renders.
+  const selectPromptTemplate = usePromptTemplateInject({
+    getCurrent: () => prompt,
+    onInject: (next) => {
+      setPrompt(next);
+      setAutoPromptUsed(false);
+    },
+  });
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFocusRef = useRef<HTMLTextAreaElement>(null);
@@ -814,6 +829,15 @@ export function GenerationDialog() {
                   </span>
                 )}
               </label>
+              <PromptTemplateButton
+                onSelect={selectPromptTemplate}
+                disabled={isWorking || hasStoryboardUpstream}
+                title={
+                  hasStoryboardUpstream
+                    ? "Không khả dụng: prompt đã bị khoá bởi template storyboard"
+                    : undefined
+                }
+              />
               <span className="gen-dialog__char-count">{prompt.length}/500</span>
             </div>
             <textarea

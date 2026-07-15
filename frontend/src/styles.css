@@ -5745,6 +5745,26 @@ button:disabled {
   gap: 8px;
 }
 
+/* Header line: "Prompt" label on the left, 📚 Mẫu + Tự tạo prompt
+   buttons on the right. Keeps the prompt section compact by putting
+   both affordances on a single row instead of stacking them under
+   the label. */
+.generation-board__prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.generation-board__prompt-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .generation-board__prompt-label {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -6715,4 +6735,486 @@ button.generation-board__thumb-button:hover {
   border-radius: 50%;
   animation: generation-board__spin 0.7s linear infinite;
   vertical-align: -1px;
+}
+
+/* ── Right panel shared chrome (tabs + body) ─────────────────────────────
+   Both the References tab and the new Templates tab render inside this
+   body container. The aside + tab buttons + close button live in
+   ReferencesPanel (the aside wrapper); the per-tab body is its own
+   component (ReferencesPanelContent, PromptTemplatesPanel). */
+
+.references-panel__tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.references-panel__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+  white-space: nowrap;
+}
+
+.references-panel__tab:hover {
+  color: var(--text);
+  background: var(--panel-high);
+}
+
+.references-panel__tab--active {
+  color: var(--accent);
+  background: var(--panel-high);
+  border-color: var(--border);
+}
+
+.references-panel__tab-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.right-panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Prompt Templates panel (Templates tab body) ─────────────────────── */
+
+.prompt-templates-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.prompt-templates-panel__toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.prompt-templates-panel__search {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--panel-high);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 80ms ease;
+}
+
+.prompt-templates-panel__search:focus {
+  border-color: var(--accent);
+}
+
+.prompt-templates-panel__add-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--panel);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 80ms ease;
+}
+
+.prompt-templates-panel__add-btn:hover {
+  filter: brightness(1.08);
+}
+
+.prompt-templates-panel__empty {
+  padding: 24px 18px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.prompt-templates-panel__empty strong {
+  color: var(--text);
+}
+
+.prompt-templates-panel__error {
+  margin: 8px 12px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 6px;
+}
+
+.prompt-templates-panel__toast-error {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--error);
+  background: var(--panel-high);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 6px;
+  z-index: 30;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.prompt-templates-panel__list {
+  flex: 1;
+  list-style: none;
+  padding: 6px 0;
+  margin: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Single template card — flat row (no thumb, since templates are text
+   only) with title + 1-line body preview + 3 small action buttons. */
+.prompt-template-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.prompt-template-card:hover {
+  background: var(--panel-high);
+}
+
+.prompt-template-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prompt-template-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-template-card__rename-input {
+  width: 100%;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-higher);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.prompt-template-card__preview {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.prompt-template-card__preview em {
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.prompt-template-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.prompt-template-card__action-btn {
+  padding: 3px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+  white-space: nowrap;
+}
+
+.prompt-template-card__action-btn:hover {
+  color: var(--text);
+  background: var(--panel-higher);
+}
+
+.prompt-template-card__action-btn--danger {
+  color: var(--muted);
+}
+
+.prompt-template-card__action-btn--danger:hover {
+  color: var(--error);
+}
+
+.prompt-template-card__action-btn--armed {
+  color: var(--panel);
+  background: var(--error);
+  border-color: var(--error);
+}
+
+.prompt-template-card__action-btn--armed:hover {
+  color: var(--panel);
+  background: var(--error);
+  filter: brightness(1.08);
+}
+
+/* ── Prompt template editor modal ─────────────────────────────────────── */
+
+.prompt-template-editor__panel {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+
+.prompt-template-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.prompt-template-editor__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.prompt-template-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.prompt-template-editor__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.prompt-template-editor__title-input,
+.prompt-template-editor__body-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--panel-high);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 80ms ease;
+  font-family: inherit;
+}
+
+.prompt-template-editor__title-input:focus,
+.prompt-template-editor__body-input:focus {
+  border-color: var(--accent);
+}
+
+.prompt-template-editor__body-input {
+  resize: vertical;
+  min-height: 160px;
+  line-height: 1.45;
+}
+
+.prompt-template-editor__char-count {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 6px;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.prompt-template-editor__field-error {
+  font-size: 11px;
+  color: var(--error);
+}
+
+.prompt-template-editor__error {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 6px;
+}
+
+.prompt-template-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── GenerationDialog label row + Prompt template picker ────────────────
+   The 📚 Mẫu button + dropdown is shared between two surfaces:
+     - GenerationDialog (canvas mode, via <PromptTemplateButton/>)
+     - GenerationBoard (generate mode, also via <PromptTemplateButton/>).
+   Classes below are intentionally NOT prefixed by the surface name so
+   the styling stays common. */
+
+/* GenerationDialog: the row above the textarea that holds the
+   "Prompt" label, the 📚 Mẫu button, and the char-count badge. */
+.gen-dialog__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* Wrapper needed so the popover anchors under the button, not under
+   the row. Used by both surfaces. */
+.prompt-template-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.prompt-template-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+  white-space: nowrap;
+}
+
+.prompt-template-btn:hover:not(:disabled) {
+  background: var(--panel-high);
+  border-color: var(--accent);
+}
+
+.prompt-template-btn--active {
+  color: var(--panel);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.prompt-template-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prompt-template-btn__picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.prompt-template-btn__picker-empty {
+  padding: 18px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.prompt-template-btn__picker-empty strong {
+  color: var(--text);
+}
+
+.prompt-template-btn__picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.prompt-template-btn__picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.prompt-template-btn__picker-item:hover {
+  background: var(--panel-high);
+}
+
+.prompt-template-btn__picker-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-template-btn__picker-preview {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
