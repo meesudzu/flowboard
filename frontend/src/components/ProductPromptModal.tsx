@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { GenerationProduct } from "../store/generationModeStore";
+import { PromptTemplateButton } from "./PromptTemplateButton";
+import { usePromptTemplateInject } from "../hooks/usePromptTemplateInject";
 
 interface ProductPromptModalProps {
   product: GenerationProduct | null;
@@ -54,6 +56,25 @@ export function ProductPromptModal({
   const [autoPrompting, setAutoPrompting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Shared inject logic — same contract as the canvas-mode
+  // GenerationDialog picker: confirm before replacing any non-empty
+  // textarea contents and warn if the chosen template is over the
+  // 500-char soft cap. After the (possibly-truncated) body is
+  // committed back into local state, refocus + selectAll so the
+  // user can immediately edit before saving.
+  const injectTemplate = usePromptTemplateInject({
+    getCurrent: () => value,
+    onInject: (next) => {
+      setValue(next);
+      // Mirror ProductPromptModal.handleAutoPrompt — push caret to
+      // end so the user can keep typing without manual clicking.
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(next.length, next.length);
+      });
+    },
+  });
 
   // Hand the AI a seed that reflects where the user is now:
   // existing override > shared prompt > "". The AI then writes
@@ -184,8 +205,13 @@ export function ProductPromptModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="product-prompt-modal__header">
-          <h3 className="product-prompt-modal__title">Sửa prompt cho sản phẩm này</h3>
+          <h3 className="product-prompt-modal__title product-prompt-modal__header-title">Sửa prompt cho sản phẩm này</h3>
           <div className="product-prompt-modal__header-actions">
+            <PromptTemplateButton
+              onSelect={injectTemplate}
+              disabled={autoPrompting || saving}
+              title="Chèn nhanh prompt mẫu từ bảng bên phải vào textarea"
+            />
             <button
               type="button"
               className="product-prompt-modal__autoprompt-btn"
@@ -207,7 +233,7 @@ export function ProductPromptModal({
             </button>
             <button
               type="button"
-              className="image-preview-modal__close"
+              className="product-prompt-modal__close"
               onClick={onClose}
               aria-label="Đóng"
               title="Đóng (Esc)"

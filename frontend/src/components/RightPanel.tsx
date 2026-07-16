@@ -86,21 +86,27 @@ export function RightPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        className="references-panel__toggle-tab"
-        onClick={togglePanel}
-        aria-label={panelOpen ? "Thu gọn bảng bên phải" : "Mở bảng bên phải"}
-        title={panelOpen ? "Thu gọn" : "Mở bảng bên phải"}
-      >
-        <span aria-hidden="true">{panelOpen ? "›" : "📚"}</span>
-      </button>
       <aside
-        className={`references-panel${
-          panelOpen ? " references-panel--open" : " references-panel--collapsed"
-        }`}
+        className={
+          panelOpen
+            ? "references-panel references-panel--open"
+            : "references-panel references-panel--collapsed"
+        }
         aria-hidden={!panelOpen}
       >
+        {/* Always-visible edge tab — sits on the canvas side of the
+            panel so the user can collapse (or re-open) it from any
+            state without scrolling into the panel header. Default is
+            open so the panel is on screen at app start. */}
+        <button
+          type="button"
+          className="references-panel__edge-tab"
+          onClick={togglePanel}
+          aria-label={panelOpen ? "Thu gọn bảng bên phải" : "Mở bảng bên phải"}
+          title={panelOpen ? "Thu gọn" : "Mở bảng bên phải"}
+        >
+          <span aria-hidden="true">{panelOpen ? "›" : "📚"}</span>
+        </button>
         <div className="references-panel__header">
           <div className="references-panel__tabs" role="tablist">
             {tabs.map((t) => (

@@ -443,10 +443,23 @@ button:disabled {
 .canvas-wrap {
   position: relative;
   display: flex;
-  flex-direction: column;
+  /* Side-by-side layout: <div class="canvas-main"> fills the remaining
+     width and <RightPanel/> takes its 300px on the right. */
+  flex-direction: row;
   overflow: hidden;
-  /* The child surfaces (ReactFlow in canvas mode, GenerationBoard in
-   * generate mode) opt back into scrolling via their own rules. */
+  min-height: 0;
+}
+
+/* Inner wrapper that holds the toolbar/board/statusbar (or
+   GenerationBoard) in their original column layout. Lives next to
+   <RightPanel/> in the canvas-wrap flex row. */
+.canvas-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── GenerationBoard scroll setup ───────────────────────────────────────── */
@@ -464,6 +477,11 @@ button:disabled {
  * the tree.
  */
 .canvas-wrap:has(.generation-board) {
+  overflow: visible;
+}
+.canvas-main:has(.generation-board) {
+  /* Generate mode's fixed-position action bar needs to escape the
+     column overflow clipping. Mirror the canvas-wrap rule above. */
   overflow: visible;
 }
 
@@ -5027,32 +5045,68 @@ button:disabled {
 /* ── References panel (right sidebar) ──────────────────────────────────── */
 
 .references-panel {
-  position: absolute;
+  /* Sits in the right column of the canvas-wrap flex row, NOT
+     absolutely positioned — the canvas fills the remaining space
+     instead of being overlapped. Width animates so the canvas
+     reflows smoothly when toggling. */
+  position: relative;
   top: 0;
   right: 0;
   bottom: 0;
   width: 300px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--panel);
   border-left: 1px solid var(--border);
-  z-index: 12;
-  transform: translateX(100%);
-  transition: transform 180ms ease;
-  /* Pull the panel slightly inset so the toggle tab sits flush against
-     its outer edge when collapsed. */
-  pointer-events: auto;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  transition: width 180ms ease;
+  overflow: hidden;
 }
 
 .references-panel--open {
-  transform: translateX(0);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  width: 300px;
 }
 
 .references-panel--collapsed {
-  /* When collapsed, also disable child input focus so a hidden search
-     box doesn't accidentally swallow keyboard events. */
-  pointer-events: none;
+  /* Don't paint the empty 0-width column so the canvas can take
+     100% of the viewport. Children are unfocusable as a side-effect
+     of width: 0. */
+  width: 0;
+  border-left: 0;
+  box-shadow: none;
+}
+
+/* Edge tab — pinned to the LEFT edge of the panel. When the panel
+   is open, it sits flush with the canvas seam (so the user can
+   collapse with one click). When collapsed the panel width is 0 and
+   only this tab is visible, giving the user a one-click re-open
+   affordance. */
+.references-panel__edge-tab {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-100%, -50%);
+  width: 28px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 13;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+.references-panel__edge-tab:hover {
+  background: var(--panel-high);
+  color: var(--text);
 }
 
 .references-panel__header {
@@ -6335,6 +6389,7 @@ button:disabled {
   background: rgba(139, 92, 246, 0.08);
   transition: background 120ms ease, color 120ms ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .product-prompt-modal__autoprompt-btn:hover:not(:disabled) {
@@ -6354,6 +6409,37 @@ button:disabled {
   width: 12px;
   height: 12px;
   margin: 0;
+}
+
+/* Scoped close button used INSIDE the modal's action row. The
+ * shared .image-preview-modal__close rule positions itself
+ * absolutely to its nearest positioned ancestor — which is the
+ * modal panel rather than the viewport in this layout, so it ends
+ * up pinning the ✕ to the panel's top-right corner and visually
+ * overlapping the "Tự tạo prompt" button. Reset to a regular
+ * flex-aligned square here. */
+.product-prompt-modal__close {
+  position: static;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--panel-high, #2a2a36);
+  border: 1px solid var(--border, #34344a);
+  color: var(--muted, #9b9bb5);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+.product-prompt-modal__close:hover {
+  background: var(--error, #ef4444);
+  border-color: var(--error, #ef4444);
+  color: #fff;
 }
 
 .product-prompt-modal__title {

@@ -48,26 +48,28 @@ export function App() {
       <ProjectSidebar />
       <ReactFlowProvider>
         <div className="canvas-wrap">
-          {boardMode === "generate" ? (
-            loading && boardId === null ? (
-              <div className="canvas-loading">Loading board…</div>
-            ) : (
-              <GenerationBoard />
-            )
-          ) : (
-            <>
-              <Toolbar />
-              {loading && boardId === null ? (
+          <div className="canvas-main">
+            {boardMode === "generate" ? (
+              loading && boardId === null ? (
                 <div className="canvas-loading">Loading board…</div>
               ) : (
-                <>
-                  <Board />
-                  <AddNodePalette />
-                </>
-              )}
-              <StatusBar />
-            </>
-          )}
+                <GenerationBoard />
+              )
+            ) : (
+              <>
+                <Toolbar />
+                {loading && boardId === null ? (
+                  <div className="canvas-loading">Loading board…</div>
+                ) : (
+                  <>
+                    <Board />
+                    <AddNodePalette />
+                  </>
+                )}
+                <StatusBar />
+              </>
+            )}
+          </div>
           <RightPanel />
         </div>
       </ReactFlowProvider>
