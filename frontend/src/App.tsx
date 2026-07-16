@@ -11,7 +11,6 @@ import { RightPanel } from "./components/RightPanel";
 import { Toaster } from "./components/Toaster";
 import { GenerationDialog } from "./components/GenerationDialog";
 import { ResultViewer } from "./components/ResultViewer";
-import { ForcedSetupGate } from "./components/ForcedSetupGate";
 import { useBoardStore } from "./store/board";
 import { useReferencesStore } from "./store/references";
 import { usePromptTemplatesStore } from "./store/promptTemplates";
@@ -77,7 +76,6 @@ export function App() {
       <Toaster />
       <GenerationDialog />
       <ResultViewer />
-      <ForcedSetupGate />
     </div>
   );
 }

@@ -577,107 +577,11 @@ export async function uploadImageFromUrl(
 }
 
 
-// ── LLM provider Settings ─────────────────────────────────────────────────
-// MiniMax-only build: there's a single LLM provider (MiniMax) in this
-// frontend/backend pair. The earlier multi-provider design (Claude /
-// Gemini / OpenAI Codex) was dropped — the cloud-VPS image doesn't
-// bundle any of those CLIs. Backend route: /api/llm/*.
-
-export type LLMProviderName = "minimax";
-export type LLMFeature = "auto_prompt" | "vision" | "planner";
-export type LLMProviderMode = "cli" | "api" | "none";
-export type LLMLastError =
-  | "not_installed"
-  | "not_authenticated"
-  | "no_key"
-  | "unreachable"
-  | "unknown";
-
-export interface LLMProviderInfo {
-  name: LLMProviderName;
-  supportsVision: boolean;
-  available: boolean;
-  configured: boolean;
-  requiresKey: boolean;
-  mode: LLMProviderMode;
-  lastError?: LLMLastError;
-  lastTest?: { ok: boolean; latencyMs?: number; error?: string };
-}
-
-export interface LLMConfig {
-  // null when the user hasn't picked a provider for this feature yet.
-  // Backend no longer fabricates a default; the forced-setup gate uses
-  // `configured` (below) to keep the dialog open until the user chooses.
-  auto_prompt: LLMProviderName | null;
-  vision: LLMProviderName | null;
-  planner: LLMProviderName | null;
-  // True only when all 3 features are pinned at the same provider —
-  // the single-provider UI invariant. Drives the forced-setup dialog.
-  configured: boolean;
-}
-
-export async function getLlmProviders(): Promise<LLMProviderInfo[]> {
-  // Backend returns snake-case keys mapped from Python — but the route
-  // already emits camelCase for the public surface. Re-typed here so
-  // the spread/destructure pattern in the UI components stays clean.
-  const res = await fetch("/api/llm/providers");
-  if (!res.ok) throw new Error(`getLlmProviders: ${res.status}`);
-  return res.json() as Promise<LLMProviderInfo[]>;
-}
-
-export async function getLlmConfig(): Promise<LLMConfig> {
-  const res = await fetch("/api/llm/config");
-  if (!res.ok) throw new Error(`getLlmConfig: ${res.status}`);
-  return res.json() as Promise<LLMConfig>;
-}
-
-export async function setLlmConfig(
-  partial: Partial<LLMConfig>,
-): Promise<{ ok: boolean }> {
-  const res = await fetch("/api/llm/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(partial),
-  });
-  if (!res.ok) throw new Error(await extractErrorMessage(res));
-  return res.json();
-}
-
-export async function setLlmApiKey(
-  name: LLMProviderName,
-  apiKey: string | null,
-): Promise<{ ok: boolean }> {
-  // null clears the key. Backend chmods secrets.json to 0o600 after
-  // every write; the key is never echoed back via getLlmProviders.
-  const res = await fetch(`/api/llm/providers/${name}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apiKey }),
-  });
-  if (!res.ok) throw new Error(await extractErrorMessage(res));
-  return res.json();
-}
-
-export interface LlmTestResult {
-  ok: boolean;
-  latencyMs?: number;
-  error?: string;
-}
-
-export async function testLlmProvider(
-  name: LLMProviderName,
-): Promise<LlmTestResult> {
-  // Cost-bounded by the backend: 1-token ping, 15s deadline. Returns
-  // ok:false (NOT a non-200 HTTP status) on any failure mode so the
-  // UI can render the error inline without try/catch boilerplate.
-  const res = await fetch(`/api/llm/providers/${name}/test`, { method: "POST" });
-  if (!res.ok) {
-    return { ok: false, error: `HTTP ${res.status}` };
-  }
-  return res.json();
-}
-
-
+// LLM provider Settings — removed. The MiniMax API key is pre-baked
+// into the backend's ~/.flowboard/secrets.json (apiKeys.minimax). No
+// frontend popup is needed: there is no UI to configure a provider.
+// Backend routes /api/llm/* still exist for ops-time rotation but are
+// not exercised by the SPA.
 // ── Activity feed ─────────────────────────────────────────────────────────
 // Read-only surface over the Request table. Captures every backend op:
 // gen_image / gen_video / edit_image (worker), auto_prompt /
